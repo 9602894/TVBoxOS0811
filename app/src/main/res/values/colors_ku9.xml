@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="transparent">#00000000</color>
+    <color name="color_FFFFFF">#FFFFFF</color>
+    <color name="color_FF000000">#FF000000</color>
+    <color name="color_1890FF">#1890FF</color>
+    <color name="color_EEEEEE">#EEEEEE</color>
+    <color name="live_bg">#CC000000</color>
+    <color name="live_item_focus">#FF1890FF</color>
+    <color name="live_item_normal">#00000000</color>
+    <color name="live_text_primary">#FFFFFF</color>
+    <color name="live_text_secondary">#CCFFFFFF</color>
+    <color name="live_text_hint">#80FFFFFF</color>
+</resources>

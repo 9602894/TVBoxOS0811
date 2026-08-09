@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="tv_bottom_logo_drawable_height">60dp</dimen>
+    <dimen name="live_channel_item_height">56dp</dimen>
+    <dimen name="live_group_item_height">40dp</dimen>
+    <dimen name="live_setting_item_height">40dp</dimen>
+</resources>
