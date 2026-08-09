@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mPoPuLayout"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent"
+    android:baselineAligned="false"
+    android:focusable="true"
+    android:orientation="horizontal"
+    android:padding="15dp"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:id="@+id/mShortcutsMenuLayout"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_marginEnd="3dp"
+        android:background="@drawable/shape_shortcutsmenu_layout_drawable"
+        android:clickable="true"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/mShortcutsMenuHeight"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <com.github.tvbox.osc.ui.tv.CustomView.CustomRecyclerView
+                android:id="@+id/mShortcutsMenuGridView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/mLargeChannelGroupLeftLayout"
+        android:layout_width="140dp"
+        android:layout_height="match_parent"
+        android:background="@drawable/shape_channelgroup_layout_drawable"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <com.github.tvbox.osc.ui.tv.CustomView.CustomRecyclerView
+            android:id="@+id/mFirstGroupGridView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/mChannelGroupLeftLayout"
+        android:layout_width="140dp"
+        android:layout_height="match_parent"
+        android:background="@drawable/shape_channelgroup_layout_drawable"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <com.github.tvbox.osc.ui.tv.CustomView.CustomRecyclerView
+            android:id="@+id/mGroupGridView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/mDivLeft"
+        android:layout_width="30dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_vertical"
+        android:background="@drawable/shape_divleft_drawable"
+        android:clickable="true"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_div_arrow" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/mChannelLeftLayout"
+        android:layout_width="260dp"
+        android:layout_height="match_parent"
+        android:background="@drawable/shape_channelgroup_layout_drawable"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <com.github.tvbox.osc.ui.tv.CustomView.CustomRecyclerView
+            android:id="@+id/mChannelGridView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/mEpgLeftLayout"
+        android:layout_width="320dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="3dp"
+        android:background="@drawable/shape_channelgroup_layout_drawable"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <com.github.tvbox.osc.ui.tv.CustomView.CustomRecyclerView
+            android:id="@+id/mEpgGridView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp" />
+    </LinearLayout>
+</LinearLayout>

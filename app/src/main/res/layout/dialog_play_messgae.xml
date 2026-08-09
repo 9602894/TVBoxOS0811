@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/mPlayMessageLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#CC000000"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="600dp"
+        android:layout_height="wrap_content"
+        android:background="@drawable/shape_message_bg"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="媒体信息"
+            android:textColor="#FFFFFF"
+            android:textSize="18dp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvVideoUrl"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="URL: "
+            android:textColor="#CCFFFFFF"
+            android:textSize="13dp" />
+
+        <TextView
+            android:id="@+id/tvVideoFormat"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="格式: "
+            android:textColor="#CCFFFFFF"
+            android:textSize="13dp" />
+
+        <TextView
+            android:id="@+id/tvVideoCodec"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="编码: "
+            android:textColor="#CCFFFFFF"
+            android:textSize="13dp" />
+
+        <TextView
+            android:id="@+id/tvVideoResolution"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="分辨率: "
+            android:textColor="#CCFFFFFF"
+            android:textSize="13dp" />
+
+        <TextView
+            android:id="@+id/tvAudioCodec"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="音频: "
+            android:textColor="#CCFFFFFF"
+            android:textSize="13dp" />
+
+        <TextView
+            android:id="@+id/tvPlayerConfig"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:text="配置参数: "
+            android:textColor="#CCFFFFFF"
+            android:textSize="13dp" />
+    </LinearLayout>
+</LinearLayout>

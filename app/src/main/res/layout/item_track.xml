@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/tvSettingItemName"
+    android:id="@+id/tvTrackName"
     android:layout_width="match_parent"
     android:layout_height="40dp"
     android:gravity="center_vertical"
     android:paddingStart="15dp"
     android:paddingEnd="15dp"
-    android:text="Setting Item"
+    android:text="Track"
     android:textColor="#CCFFFFFF"
     android:textSize="14dp" />
