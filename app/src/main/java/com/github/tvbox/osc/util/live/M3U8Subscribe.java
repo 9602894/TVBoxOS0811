@@ -50,25 +50,25 @@ public class M3U8Subscribe {
                     currentItem.setChannelNum(channelNum++);
 
                     // 解析 tvg-name
-                    Matcher nameMatcher = Pattern.compile("tvg-name="(.*?)"").matcher(line);
+                    Matcher nameMatcher = Pattern.compile("tvg-name=\"(.*?)\"").matcher(line);
                     if (nameMatcher.find()) {
                         currentItem.setChannelName(nameMatcher.group(1));
                     }
 
                     // 解析 tvg-logo
-                    Matcher logoMatcher = Pattern.compile("tvg-logo="(.*?)"").matcher(line);
+                    Matcher logoMatcher = Pattern.compile("tvg-logo=\"(.*?)\"").matcher(line);
                     if (logoMatcher.find()) {
                         currentItem.setChannelLogo(logoMatcher.group(1));
                     }
 
                     // 解析 group-title
-                    Matcher groupMatcher = Pattern.compile("group-title="(.*?)"").matcher(line);
+                    Matcher groupMatcher = Pattern.compile("group-title=\"(.*?)\"").matcher(line);
                     if (groupMatcher.find()) {
                         currentItem.setGroupName(groupMatcher.group(1));
                     }
 
                     // 解析 tvg-chno (频道号)
-                    Matcher chnoMatcher = Pattern.compile("tvg-chno="(.*?)"").matcher(line);
+                    Matcher chnoMatcher = Pattern.compile("tvg-chno=\"(.*?)\"").matcher(line);
                     if (chnoMatcher.find()) {
                         try {
                             currentItem.setChannelNum(Integer.parseInt(chnoMatcher.group(1)));
@@ -76,7 +76,7 @@ public class M3U8Subscribe {
                     }
 
                     // 解析 tvg-id (EPG ID)
-                    Matcher epgMatcher = Pattern.compile("tvg-id="(.*?)"").matcher(line);
+                    Matcher epgMatcher = Pattern.compile("tvg-id=\"(.*?)\"").matcher(line);
                     if (epgMatcher.find()) {
                         currentItem.setEpg(epgMatcher.group(1));
                     }
