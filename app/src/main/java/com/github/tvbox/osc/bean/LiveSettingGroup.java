@@ -6,7 +6,7 @@ import java.util.List;
 public class LiveSettingGroup {
     private int groupIndex;
     private String groupName;
-    private ArrayList liveSettingItems;
+    private List<LiveSettingItem> liveSettingItems;
 
     public int getGroupIndex() {
         return groupIndex;
@@ -24,21 +24,11 @@ public class LiveSettingGroup {
         this.groupName = groupName;
     }
 
-    public ArrayList getLiveSettingItems() {
+    public List<LiveSettingItem> getLiveSettingItems() {
         return liveSettingItems;
     }
 
-    public void setLiveSettingItems(ArrayList liveSettingItems) {
+    public void setLiveSettingItems(List<LiveSettingItem> liveSettingItems) {
         this.liveSettingItems = liveSettingItems;
     }
-
-    // ========== 酷9兼容方法 ==========
-    public void setLiveSettingItems(List<LiveSettingItem> items) {
-        if (items instanceof ArrayList) {
-            this.liveSettingItems = (ArrayList) items;
-        } else {
-            this.liveSettingItems = new ArrayList<>(items);
-        }
-    }
-    // ========== 兼容方法结束 ==========
 }
