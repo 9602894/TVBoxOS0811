@@ -1,17 +1,13 @@
 package com.github.tvbox.osc.bean;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class LiveChannelGroup {
-    /**
-     * groupIndex : 分组索引号
-     * groupName : 分组名称
-     * password : 分组密码
-     */
     private int groupIndex;
     private String groupName;
     private String groupPassword;
-    private ArrayList<LiveChannelItem> liveChannelItems;
+    private ArrayList liveChannelItems;
 
     public int getGroupIndex() {
         return groupIndex;
@@ -29,13 +25,23 @@ public class LiveChannelGroup {
         this.groupName = groupName;
     }
 
-    public ArrayList<LiveChannelItem> getLiveChannels() {
+    public ArrayList getLiveChannels() {
         return liveChannelItems;
     }
 
-    public void setLiveChannels(ArrayList<LiveChannelItem> liveChannelItems) {
+    public void setLiveChannels(ArrayList liveChannelItems) {
         this.liveChannelItems = liveChannelItems;
     }
+
+    // ========== 酷9兼容方法 ==========
+    public void setLiveChannels(List<LiveChannelItem> liveChannelItems) {
+        if (liveChannelItems instanceof ArrayList) {
+            this.liveChannelItems = (ArrayList) liveChannelItems;
+        } else {
+            this.liveChannelItems = new ArrayList<>(liveChannelItems);
+        }
+    }
+    // ========== 兼容方法结束 ==========
 
     public String getGroupPassword() {
         return groupPassword;
