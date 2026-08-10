@@ -3,7 +3,6 @@ package com.github.tvbox.osc.ui.activity;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
-import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.CountDownTimer;
@@ -91,7 +90,7 @@ import xyz.doikki.videoplayer.player.VideoView;
 
 /**
  * LivePlayActivity - 整合酷9全部功能，自包含所有适配器，不依赖额外布局文件
- * 增加未配置接口时引导进入设置的功能
+ * 未配置接口时引导用户返回主界面设置
  */
 public class LivePlayActivity extends BaseActivity {
     public static Context context;
@@ -297,17 +296,13 @@ public class LivePlayActivity extends BaseActivity {
         if (TextUtils.isEmpty(apiUrl)) {
             // 显示提示并引导
             Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
-            // 显示一个可点击的提示视图（这里简单 Toast，也可添加一个自定义视图）
-            // 按返回键将跳转到设置，按菜单键也会跳转
+            // 按返回键或菜单键将触发 gotoSetting()
         }
     }
 
-    // ========== 跳转到设置（主界面） ==========
+    // ========== 跳转到设置（引导用户返回主界面） ==========
     private void gotoSetting() {
-        // 跳转到 MainActivity，因为 MainActivity 通常有设置入口
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
+        Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
         finish();
     }
 
