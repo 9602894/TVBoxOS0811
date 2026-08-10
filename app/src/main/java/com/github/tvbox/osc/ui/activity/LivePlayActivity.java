@@ -763,14 +763,22 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     // ========== 修正后的 normalizeEpgChannelName ==========
-    private String normalizeEpgChannelName(String name) {
-        if (name == null) return "";
-        return name.replaceAll("CCTV-", "CCTV")
-                   .replaceAll("\\+", "")
-                   .replaceAll("HD", "")
-                   .replaceAll("\\d+K", "")
-                   .replaceAll("\\s+", "")
-                   .trim();
+    private String normalizeEpgChannelName(String channelName) {
+        if (channelName == null) {
+            return "";
+        }
+        String trimName = channelName.trim();
+        String compactName = trimName.replace("-", "").replace(" ", "");
+        // 酷9风格增强：去除 +、HD、4K/8K 等标识
+        compactName = compactName.replaceAll("\\+", "").replaceAll("HD", "").replaceAll("\\d+K", "");
+        Matcher cctvMatcher = Pattern.compile("(?i)^(CCTV\\d+(?:\\+|K)?)(?:[\\u4e00-\\u9fa5].*|$)").matcher(compactName);
+        if (cctvMatcher.matches()) {
+            return cctvMatcher.group(1).toUpperCase(Locale.ROOT);
+        }
+        if (compactName.toUpperCase(Locale.ROOT).startsWith("CCTV")) {
+            return compactName.toUpperCase(Locale.ROOT);
+        }
+        return trimName;
     }
 
     private void showBottomEpg() {
