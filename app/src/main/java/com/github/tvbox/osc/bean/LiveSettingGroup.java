@@ -1,11 +1,12 @@
 package com.github.tvbox.osc.bean;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class LiveSettingGroup {
     private int groupIndex;
     private String groupName;
-    private ArrayList<LiveSettingItem> liveSettingItems;
+    private ArrayList liveSettingItems;
 
     public int getGroupIndex() {
         return groupIndex;
@@ -23,11 +24,21 @@ public class LiveSettingGroup {
         this.groupName = groupName;
     }
 
-    public ArrayList<LiveSettingItem> getLiveSettingItems() {
+    public ArrayList getLiveSettingItems() {
         return liveSettingItems;
     }
 
-    public void setLiveSettingItems(ArrayList<LiveSettingItem> liveSettingItems) {
+    public void setLiveSettingItems(ArrayList liveSettingItems) {
         this.liveSettingItems = liveSettingItems;
     }
+
+    // ========== 酷9兼容方法 ==========
+    public void setLiveSettingItems(List<LiveSettingItem> items) {
+        if (items instanceof ArrayList) {
+            this.liveSettingItems = (ArrayList) items;
+        } else {
+            this.liveSettingItems = new ArrayList<>(items);
+        }
+    }
+    // ========== 兼容方法结束 ==========
 }
