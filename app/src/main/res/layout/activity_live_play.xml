@@ -12,6 +12,14 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- 加载进度条 -->
+    <ProgressBar
+        android:id="@+id/loadingProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
     <!-- 切台快照遮罩 -->
     <View
         android:id="@+id/switchChannelSnapshotOverlay"
