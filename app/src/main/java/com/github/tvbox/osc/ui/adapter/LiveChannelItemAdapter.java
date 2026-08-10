@@ -10,11 +10,6 @@ import com.github.tvbox.osc.bean.LiveChannelItem;
 
 import java.util.ArrayList;
 
-/**
- * @author pj567
- * @date :2021/1/12
- * @description:
- */
 public class LiveChannelItemAdapter extends BaseQuickAdapter<LiveChannelItem, BaseViewHolder> {
     private int selectedChannelIndex = -1;
     private int focusedChannelIndex = -1;
@@ -36,8 +31,7 @@ public class LiveChannelItemAdapter extends BaseQuickAdapter<LiveChannelItem, Ba
         if (channelIndex == selectedChannelIndex && channelIndex != focusedChannelIndex) {
             tvChannelNum.setTextColor(mContext.getResources().getColor(R.color.color_1890FF));
             tvChannel.setTextColor(mContext.getResources().getColor(R.color.color_1890FF));
-        }
-        else{
+        } else {
             tvChannelNum.setTextColor(Color.WHITE);
             tvChannel.setTextColor(Color.WHITE);
         }
@@ -52,6 +46,12 @@ public class LiveChannelItemAdapter extends BaseQuickAdapter<LiveChannelItem, Ba
         if (this.selectedChannelIndex != -1)
             notifyItemChanged(this.selectedChannelIndex);
     }
+
+    // ========== 酷9兼容方法 ==========
+    public void setSelectedPosition(int position) {
+        setSelectedChannelIndex(position);
+    }
+    // ========== 兼容方法结束 ==========
 
     public void setFocusedChannelIndex(int focusedChannelIndex) {
         int preFocusedChannelIndex = this.focusedChannelIndex;
