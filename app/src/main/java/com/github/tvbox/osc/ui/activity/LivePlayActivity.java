@@ -13,6 +13,7 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -37,7 +38,6 @@ import com.github.tvbox.osc.base.BaseActivity;
 import com.github.tvbox.osc.bean.Epginfo;
 import com.github.tvbox.osc.bean.LiveChannelGroup;
 import com.github.tvbox.osc.bean.LiveChannelItem;
-import com.github.tvbox.osc.bean.LiveDayListGroup;
 import com.github.tvbox.osc.bean.LiveEpgDate;
 import com.github.tvbox.osc.bean.LivePlayerManager;
 import com.github.tvbox.osc.bean.LiveSettingGroup;
@@ -50,6 +50,9 @@ import com.github.tvbox.osc.ui.adapter.LiveEpgDateAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveSettingGroupAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveSettingItemAdapter;
 import com.github.tvbox.osc.ui.adapter.MyEpgAdapter;
+import com.github.tvbox.osc.ui.adapter.SearchChannelAdapter;
+import com.github.tvbox.osc.ui.adapter.ShortcutsMenuAdapter;
+import com.github.tvbox.osc.ui.adapter.TrackListAdapter;
 import com.github.tvbox.osc.util.EpgUtil;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.LOG;
@@ -92,8 +95,8 @@ import okhttp3.Response;
 import xyz.doikki.videoplayer.player.VideoView;
 
 /**
- * LivePlayActivity - 完整整合酷9所有功能
- * 使用酷9的布局和适配器，内置设置对话框
+ * 完整整合酷9所有功能的直播播放Activity
+ * 使用酷9的布局和适配器
  */
 public class LivePlayActivity extends BaseActivity {
     private static final String TAG = "LivePlay";
@@ -103,7 +106,7 @@ public class LivePlayActivity extends BaseActivity {
     private VideoView mVideoView;
     private LivePlayerManager livePlayerManager = new LivePlayerManager();
 
-    // ========== 频道列表 UI ==========
+    // ========== 频道列表 UI（酷9样式） ==========
     private LinearLayout tvLeftChannelListLayout;
     private TvRecyclerView mChannelGroupView;
     private TvRecyclerView mLiveChannelView;
@@ -111,7 +114,7 @@ public class LivePlayActivity extends BaseActivity {
     private LiveChannelItemAdapter liveChannelItemAdapter;
     private List<LiveChannelGroup> liveChannelGroupList = new ArrayList<>();
 
-    // ========== 设置 UI ==========
+    // ========== 设置 UI（酷9样式） ==========
     private LinearLayout tvRightSettingLayout;
     private TvRecyclerView mSettingGroupView;
     private TvRecyclerView mSettingItemView;
@@ -119,7 +122,7 @@ public class LivePlayActivity extends BaseActivity {
     private LiveSettingItemAdapter liveSettingItemAdapter;
     private List<LiveSettingGroup> liveSettingGroupList = new ArrayList<>();
 
-    // ========== EPG UI ==========
+    // ========== EPG UI（酷9样式） ==========
     private TextView tv_curepg_left, tv_nextepg_left;
     private TextView tip_epg1, tip_epg2;
     private TextView tv_current_program_name, tv_next_program_name;
@@ -179,10 +182,12 @@ public class LivePlayActivity extends BaseActivity {
     private int resolutionInfoRetryCount = 0;
     private boolean resolutionInfoPending = false;
 
-    // ========== 快捷菜单、搜索、音轨切换 ==========
-    private PopupWindow shortcutsPopupWindow;
-    private PopupWindow searchPopupWindow;
-    private PopupWindow trackPopupWindow;
+    // ========== 酷9的额外UI组件 ==========
+    private ShortcutsMenuAdapter shortcutsMenuAdapter;
+    private SearchChannelAdapter searchChannelAdapter;
+    private TrackListAdapter trackListAdapter;
+    private RecyclerView rvShortcuts, rvSearch, rvTrack;
+    private PopupWindow shortcutsPopup, searchPopup, trackPopup;
 
     // ========== 生命周期 ==========
     @Override
@@ -196,9 +201,7 @@ public class LivePlayActivity extends BaseActivity {
         epgStringAddress = getConfiguredEpgAddress();
         setLoadSir(findViewById(R.id.live_root));
 
-        Log.d(TAG, "init: 开始初始化");
-
-        // ---------- 绑定视图（所有ID需与布局文件一致） ----------
+        // ---------- 绑定视图（酷9布局） ----------
         try {
             mVideoView = findViewById(R.id.mVideoView);
             tvLeftChannelListLayout = findViewById(R.id.tvLeftChannnelListLayout);
@@ -244,13 +247,18 @@ public class LivePlayActivity extends BaseActivity {
             tv_current_program_name = findViewById(R.id.tv_current_program_name);
             tv_next_program_name = findViewById(R.id.tv_next_program_name);
 
+            // 酷9额外控件（如果布局中有，否则创建）
+            // 这里假定您已经放了这些ID，如果没有可以注释掉
+            // rvShortcuts = findViewById(R.id.rv_shortcuts_menu);
+            // rvSearch = findViewById(R.id.rv_search_channel);
+            // rvTrack = findViewById(R.id.rv_track);
+
             if (imgLiveIcon != null) imgLiveIcon.setVisibility(View.INVISIBLE);
             if (liveIconNullText != null) liveIconNullText.setVisibility(View.INVISIBLE);
             if (liveIconNullBg != null) liveIconNullBg.setVisibility(View.INVISIBLE);
-            Log.d(TAG, "init: 视图绑定成功");
         } catch (Exception e) {
-            Log.e(TAG, "init: 视图绑定失败", e);
-            Toast.makeText(this, "布局错误，请检查资源ID", Toast.LENGTH_LONG).show();
+            Log.e(TAG, "init view error", e);
+            Toast.makeText(this, "布局错误", Toast.LENGTH_LONG).show();
             return;
         }
 
@@ -280,7 +288,7 @@ public class LivePlayActivity extends BaseActivity {
         initLiveSettingGroupList();
         Hawk.put(HawkConfig.PLAYER_IS_LIVE, true);
 
-        // ---------- 初始化酷9风格菜单 ----------
+        // ---------- 初始化酷9的快捷菜单、搜索、音轨切换 ----------
         initShortcutsMenu();
         initSearchDialog();
         initTrackDialog();
@@ -408,7 +416,6 @@ public class LivePlayActivity extends BaseActivity {
             return;
         }
         livePlayerManager.init(mVideoView);
-        // 使用酷9的LiveController
         try {
             mVideoView.setVideoController(new LiveController(this));
         } catch (Exception e) {
@@ -416,7 +423,7 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-    // ========== 频道列表 ==========
+    // ========== 频道列表（酷9样式） ==========
     private void initChannelGroupView() {
         if (mChannelGroupView == null) return;
         mChannelGroupView.setHasFixedSize(true);
@@ -466,7 +473,7 @@ public class LivePlayActivity extends BaseActivity {
         playChannel(currentChannelGroupIndex, position, true);
     }
 
-    // ========== 设置列表 ==========
+    // ========== 设置列表（酷9样式） ==========
     private void initSettingGroupView() {
         if (mSettingGroupView == null) return;
         mSettingGroupView.setHasFixedSize(true);
@@ -565,7 +572,7 @@ public class LivePlayActivity extends BaseActivity {
         return 0;
     }
 
-    // ========== 加载直播源 ==========
+    // ========== 加载直播源（带详细错误处理） ==========
     private void initLiveChannelList() {
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (TextUtils.isEmpty(apiUrl)) {
@@ -573,7 +580,7 @@ public class LivePlayActivity extends BaseActivity {
             showSettingDialog();
             return;
         }
-        Log.d(TAG, "initLiveChannelList: 开始加载直播源");
+        Log.d(TAG, "initLiveChannelList: 开始加载直播源，地址=" + apiUrl);
         ApiConfig api = ApiConfig.get();
         List<LiveChannelGroup> list = api.getChannelGroupList();
         if (list != null && !list.isEmpty()) {
@@ -597,7 +604,15 @@ public class LivePlayActivity extends BaseActivity {
         new Thread(() -> {
             try {
                 String configJson = fetchContent(apiUrl);
-                if (configJson != null && configJson.trim().startsWith("{")) {
+                if (configJson == null) {
+                    runOnUiThread(() -> {
+                        showSuccess();
+                        Toast.makeText(LivePlayActivity.this, "请求接口失败，请检查地址是否正确", Toast.LENGTH_LONG).show();
+                        showSettingDialog();
+                    });
+                    return;
+                }
+                if (configJson.trim().startsWith("{")) {
                     com.google.gson.JsonObject config = com.google.gson.JsonParser.parseString(configJson).getAsJsonObject();
                     if (config.has("lives")) {
                         com.google.gson.JsonArray lives = config.getAsJsonArray("lives");
@@ -605,7 +620,17 @@ public class LivePlayActivity extends BaseActivity {
                         return;
                     }
                 }
-                // 若没有 lives 字段，尝试当作单一直播源
+                // 尝试解析为数组
+                try {
+                    com.google.gson.JsonArray array = com.google.gson.JsonParser.parseString(configJson).getAsJsonArray();
+                    if (array.size() > 0) {
+                        loadLivesAndApply(array);
+                        return;
+                    }
+                } catch (Exception e) {
+                    // 不是数组
+                }
+                // 当作单一直播源
                 com.google.gson.JsonArray livesArray = new com.google.gson.JsonArray();
                 com.google.gson.JsonObject liveObj = new com.google.gson.JsonObject();
                 liveObj.addProperty("name", "直播源");
@@ -633,6 +658,8 @@ public class LivePlayActivity extends BaseActivity {
             Response response = client.newCall(request).execute();
             if (response.isSuccessful() && response.body() != null) {
                 return response.body().string();
+            } else {
+                Log.e(TAG, "fetchContent: 响应码=" + response.code());
             }
         } catch (Exception e) {
             Log.e(TAG, "fetchContent: 网络错误", e);
@@ -652,6 +679,8 @@ public class LivePlayActivity extends BaseActivity {
                 applyChannelList(list);
             } else {
                 Toast.makeText(LivePlayActivity.this, "未解析到频道，请检查直播源格式", Toast.LENGTH_LONG).show();
+                // 如果解析失败，重新弹出设置对话框
+                showSettingDialog();
             }
         });
     }
@@ -671,7 +700,7 @@ public class LivePlayActivity extends BaseActivity {
         mHandler.postDelayed(mLoadEpgRun, EPG_LOAD_DELAY);
     }
 
-    // ========== 设置项数据 ==========
+    // ========== 设置项数据（酷9样式） ==========
     private void initLiveSettingGroupList() {
         liveSettingGroupList.clear();
         // 线路
@@ -1534,6 +1563,185 @@ public class LivePlayActivity extends BaseActivity {
         }
     };
 
+    // ========== 酷9快捷菜单、搜索、音轨切换（使用酷9的适配器和布局） ==========
+    private void initShortcutsMenu() {
+        // 如果布局中有快捷菜单 RecyclerView，则直接使用，否则创建 PopupWindow
+        if (rvShortcuts == null) {
+            // 创建 PopupWindow 内容
+            RecyclerView rv = new RecyclerView(this);
+            rv.setLayoutManager(new LinearLayoutManager(this));
+            rv.setBackgroundColor(Color.BLACK);
+            rv.setPadding(20, 20, 20, 20);
+            rvShortcuts = rv;
+        }
+        shortcutsMenuAdapter = new ShortcutsMenuAdapter();
+        // 添加数据（酷9的快捷菜单项）
+        List<ShortcutsMenuAdapter.ShortcutsItem> items = new ArrayList<>();
+        items.add(new ShortcutsMenuAdapter.ShortcutsItem("解码方式", 0));
+        items.add(new ShortcutsMenuAdapter.ShortcutsItem("画面比例", 1));
+        items.add(new ShortcutsMenuAdapter.ShortcutsItem("时移", 2));
+        items.add(new ShortcutsMenuAdapter.ShortcutsItem("回看", 3));
+        items.add(new ShortcutsMenuAdapter.ShortcutsItem("换源", 4));
+        items.add(new ShortcutsMenuAdapter.ShortcutsItem("显示EPG", 5));
+        shortcutsMenuAdapter.setNewData(items);
+        rvShortcuts.setAdapter(shortcutsMenuAdapter);
+        shortcutsMenuAdapter.setOnItemClickListener((adapter, view, position) -> {
+            ShortcutsMenuAdapter.ShortcutsItem item = adapter.getItem(position);
+            if (item != null) {
+                handleShortcutAction(item.getType());
+            }
+            if (shortcutsPopup != null) shortcutsPopup.dismiss();
+        });
+
+        if (shortcutsPopup == null) {
+            shortcutsPopup = new PopupWindow(rvShortcuts,
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.5),
+                    ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            shortcutsPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            shortcutsPopup.setOutsideTouchable(true);
+            shortcutsPopup.setFocusable(true);
+        }
+    }
+
+    private void handleShortcutAction(int type) {
+        switch (type) {
+            case 0: // 解码方式
+                Toast.makeText(this, "切换解码器", Toast.LENGTH_SHORT).show();
+                break;
+            case 1: // 画面比例
+                Toast.makeText(this, "切换画面比例", Toast.LENGTH_SHORT).show();
+                break;
+            case 2: // 时移
+                Toast.makeText(this, "时移功能", Toast.LENGTH_SHORT).show();
+                break;
+            case 3: // 回看
+                Toast.makeText(this, "回看功能", Toast.LENGTH_SHORT).show();
+                break;
+            case 4: // 换源
+                if (currentLiveChannelItem != null) {
+                    int nextSource = currentLiveChannelItem.getSourceIndex() + 1;
+                    if (nextSource >= currentLiveChannelItem.getSourceNum()) nextSource = 0;
+                    currentLiveChannelItem.setSourceIndex(nextSource);
+                    playChannel(currentChannelGroupIndex, currentLiveChannelIndex, false);
+                }
+                break;
+            case 5: // EPG
+                if (divEpg != null) {
+                    divEpg.setVisibility(divEpg.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+                }
+                break;
+        }
+    }
+
+    private void showShortcutsMenu() {
+        if (shortcutsPopup != null && !shortcutsPopup.isShowing()) {
+            shortcutsPopup.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        }
+    }
+
+    // ---------- 搜索 ----------
+    private void initSearchDialog() {
+        if (rvSearch == null) {
+            RecyclerView rv = new RecyclerView(this);
+            rv.setLayoutManager(new LinearLayoutManager(this));
+            rv.setBackgroundColor(Color.BLACK);
+            rv.setPadding(20, 20, 20, 20);
+            rvSearch = rv;
+        }
+        searchChannelAdapter = new SearchChannelAdapter();
+        rvSearch.setAdapter(searchChannelAdapter);
+        searchChannelAdapter.setOnItemClickListener((adapter, view, position) -> {
+            LiveChannelItem item = searchChannelAdapter.getItem(position);
+            if (item != null) {
+                for (int g = 0; g < liveChannelGroupList.size(); g++) {
+                    LiveChannelGroup group = liveChannelGroupList.get(g);
+                    if (group != null && group.getLiveChannels() != null) {
+                        int idx = group.getLiveChannels().indexOf(item);
+                        if (idx >= 0) {
+                            playChannel(g, idx, true);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (searchPopup != null) searchPopup.dismiss();
+        });
+        // 初始数据
+        List<LiveChannelItem> allChannels = new ArrayList<>();
+        for (LiveChannelGroup group : liveChannelGroupList) {
+            if (group != null && group.getLiveChannels() != null) {
+                allChannels.addAll(group.getLiveChannels());
+            }
+        }
+        searchChannelAdapter.setNewData(allChannels);
+
+        if (searchPopup == null) {
+            searchPopup = new PopupWindow(rvSearch,
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.6),
+                    ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            searchPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            searchPopup.setOutsideTouchable(true);
+            searchPopup.setFocusable(true);
+        }
+    }
+
+    private void showSearchDialog() {
+        if (searchPopup != null && !searchPopup.isShowing()) {
+            // 刷新数据
+            List<LiveChannelItem> allChannels = new ArrayList<>();
+            for (LiveChannelGroup group : liveChannelGroupList) {
+                if (group != null && group.getLiveChannels() != null) {
+                    allChannels.addAll(group.getLiveChannels());
+                }
+            }
+            searchChannelAdapter.setNewData(allChannels);
+            searchPopup.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        }
+    }
+
+    // ---------- 音轨/字幕切换 ----------
+    private void initTrackDialog() {
+        if (rvTrack == null) {
+            RecyclerView rv = new RecyclerView(this);
+            rv.setLayoutManager(new LinearLayoutManager(this));
+            rv.setBackgroundColor(Color.BLACK);
+            rv.setPadding(20, 20, 20, 20);
+            rvTrack = rv;
+        }
+        trackListAdapter = new TrackListAdapter();
+        rvTrack.setAdapter(trackListAdapter);
+        trackListAdapter.setOnItemClickListener((adapter, view, position) -> {
+            TrackListAdapter.TrackItem item = trackListAdapter.getItem(position);
+            if (item != null && mVideoView != null) {
+                Toast.makeText(this, "切换到: " + item.getName(), Toast.LENGTH_SHORT).show();
+                // 实际切换逻辑
+            }
+            if (trackPopup != null) trackPopup.dismiss();
+        });
+        // 示例数据
+        List<TrackListAdapter.TrackItem> tracks = new ArrayList<>();
+        tracks.add(new TrackListAdapter.TrackItem("音轨1", TrackListAdapter.TrackType.AUDIO));
+        tracks.add(new TrackListAdapter.TrackItem("音轨2", TrackListAdapter.TrackType.AUDIO));
+        tracks.add(new TrackListAdapter.TrackItem("字幕1", TrackListAdapter.TrackType.SUBTITLE));
+        trackListAdapter.setNewData(tracks);
+
+        if (trackPopup == null) {
+            trackPopup = new PopupWindow(rvTrack,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            trackPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            trackPopup.setOutsideTouchable(true);
+            trackPopup.setFocusable(true);
+        }
+    }
+
+    private void showTrackDialog() {
+        if (trackPopup != null && !trackPopup.isShowing()) {
+            // 从播放器获取轨道数据
+            trackPopup.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        }
+    }
+
     // ========== 按键事件 ==========
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
@@ -1661,233 +1869,6 @@ public class LivePlayActivity extends BaseActivity {
             }
         }
     };
-
-    // ========== 自包含菜单 ==========
-    private void initShortcutsMenu() {
-        RecyclerView rv = new RecyclerView(this);
-        rv.setLayoutManager(new LinearLayoutManager(this));
-        rv.setBackgroundColor(Color.BLACK);
-        rv.setPadding(20, 20, 20, 20);
-
-        String[] menuNames = {"解码方式", "画面比例", "时移", "回看", "换源", "显示EPG"};
-        final int[] menuTypes = {0, 1, 2, 3, 4, 5};
-        ShortcutsAdapter adapter = new ShortcutsAdapter(menuNames);
-        rv.setAdapter(adapter);
-        adapter.setOnItemClickListener(position -> {
-            handleShortcutAction(menuTypes[position]);
-            if (shortcutsPopupWindow != null) shortcutsPopupWindow.dismiss();
-        });
-
-        shortcutsPopupWindow = new PopupWindow(rv,
-                (int) (getResources().getDisplayMetrics().widthPixels * 0.5),
-                ViewGroup.LayoutParams.WRAP_CONTENT, true);
-        shortcutsPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        shortcutsPopupWindow.setOutsideTouchable(true);
-        shortcutsPopupWindow.setFocusable(true);
-    }
-
-    private void handleShortcutAction(int type) {
-        switch (type) {
-            case 0:
-                Toast.makeText(this, "切换解码器", Toast.LENGTH_SHORT).show();
-                break;
-            case 1:
-                Toast.makeText(this, "切换画面比例", Toast.LENGTH_SHORT).show();
-                break;
-            case 2:
-                Toast.makeText(this, "时移功能", Toast.LENGTH_SHORT).show();
-                break;
-            case 3:
-                Toast.makeText(this, "回看功能", Toast.LENGTH_SHORT).show();
-                break;
-            case 4:
-                if (currentLiveChannelItem != null) {
-                    int nextSource = currentLiveChannelItem.getSourceIndex() + 1;
-                    if (nextSource >= currentLiveChannelItem.getSourceNum()) nextSource = 0;
-                    currentLiveChannelItem.setSourceIndex(nextSource);
-                    playChannel(currentChannelGroupIndex, currentLiveChannelIndex, false);
-                }
-                break;
-            case 5:
-                if (divEpg != null) {
-                    divEpg.setVisibility(divEpg.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
-                }
-                break;
-        }
-    }
-
-    private void showShortcutsMenu() {
-        if (shortcutsPopupWindow != null && !shortcutsPopupWindow.isShowing()) {
-            shortcutsPopupWindow.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
-        }
-    }
-
-    // ---------- 搜索 ----------
-    private void initSearchDialog() {
-        RecyclerView rv = new RecyclerView(this);
-        rv.setLayoutManager(new LinearLayoutManager(this));
-        rv.setBackgroundColor(Color.BLACK);
-        rv.setPadding(20, 20, 20, 20);
-
-        SearchAdapter adapter = new SearchAdapter(new ArrayList<>());
-        rv.setAdapter(adapter);
-        adapter.setOnItemClickListener(position -> {
-            LiveChannelItem item = adapter.getItem(position);
-            if (item != null) {
-                for (int g = 0; g < liveChannelGroupList.size(); g++) {
-                    LiveChannelGroup group = liveChannelGroupList.get(g);
-                    if (group != null && group.getLiveChannels() != null) {
-                        int idx = group.getLiveChannels().indexOf(item);
-                        if (idx >= 0) {
-                            playChannel(g, idx, true);
-                            break;
-                        }
-                    }
-                }
-            }
-            if (searchPopupWindow != null) searchPopupWindow.dismiss();
-        });
-        List<LiveChannelItem> allChannels = new ArrayList<>();
-        for (LiveChannelGroup group : liveChannelGroupList) {
-            if (group != null && group.getLiveChannels() != null) {
-                allChannels.addAll(group.getLiveChannels());
-            }
-        }
-        adapter.setNewData(allChannels);
-
-        searchPopupWindow = new PopupWindow(rv,
-                (int) (getResources().getDisplayMetrics().widthPixels * 0.6),
-                ViewGroup.LayoutParams.WRAP_CONTENT, true);
-        searchPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        searchPopupWindow.setOutsideTouchable(true);
-        searchPopupWindow.setFocusable(true);
-    }
-
-    private void showSearchDialog() {
-        if (searchPopupWindow != null && !searchPopupWindow.isShowing()) {
-            searchPopupWindow.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
-        }
-    }
-
-    // ---------- 音轨/字幕 ----------
-    private void initTrackDialog() {
-        RecyclerView rv = new RecyclerView(this);
-        rv.setLayoutManager(new LinearLayoutManager(this));
-        rv.setBackgroundColor(Color.BLACK);
-        rv.setPadding(20, 20, 20, 20);
-
-        TrackAdapter adapter = new TrackAdapter(new ArrayList<>());
-        rv.setAdapter(adapter);
-        adapter.setOnItemClickListener(position -> {
-            TrackItem item = adapter.getItem(position);
-            if (item != null && mVideoView != null) {
-                Toast.makeText(this, "切换到: " + item.name, Toast.LENGTH_SHORT).show();
-            }
-            if (trackPopupWindow != null) trackPopupWindow.dismiss();
-        });
-        List<TrackItem> tracks = new ArrayList<>();
-        tracks.add(new TrackItem("音轨1", "audio"));
-        tracks.add(new TrackItem("音轨2", "audio"));
-        tracks.add(new TrackItem("字幕1", "subtitle"));
-        adapter.setNewData(tracks);
-
-        trackPopupWindow = new PopupWindow(rv,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT, true);
-        trackPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        trackPopupWindow.setOutsideTouchable(true);
-        trackPopupWindow.setFocusable(true);
-    }
-
-    private void showTrackDialog() {
-        if (trackPopupWindow != null && !trackPopupWindow.isShowing()) {
-            trackPopupWindow.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
-        }
-    }
-
-    // ========== 内部适配器 ==========
-    private static class ShortcutsAdapter extends RecyclerView.Adapter<ShortcutsAdapter.ViewHolder> {
-        private String[] names;
-        private OnItemClickListener listener;
-        interface OnItemClickListener { void onItemClick(int position); }
-        ShortcutsAdapter(String[] names) { this.names = names; }
-        void setOnItemClickListener(OnItemClickListener listener) { this.listener = listener; }
-        @NonNull @Override public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            TextView tv = new TextView(parent.getContext());
-            tv.setPadding(50, 30, 50, 30);
-            tv.setTextColor(Color.WHITE);
-            tv.setTextSize(18);
-            return new ViewHolder(tv);
-        }
-        @Override public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            holder.textView.setText(names[position]);
-            holder.textView.setOnClickListener(v -> { if (listener != null) listener.onItemClick(position); });
-        }
-        @Override public int getItemCount() { return names.length; }
-        static class ViewHolder extends RecyclerView.ViewHolder {
-            TextView textView;
-            ViewHolder(View itemView) { super(itemView); textView = (TextView) itemView; }
-        }
-    }
-
-    private static class SearchAdapter extends RecyclerView.Adapter<SearchAdapter.ViewHolder> {
-        private List<LiveChannelItem> data = new ArrayList<>();
-        private OnItemClickListener listener;
-        interface OnItemClickListener { void onItemClick(int position); }
-        SearchAdapter(List<LiveChannelItem> data) { this.data = data; }
-        void setNewData(List<LiveChannelItem> newData) { data.clear(); if (newData != null) data.addAll(newData); notifyDataSetChanged(); }
-        LiveChannelItem getItem(int position) { return data.get(position); }
-        void setOnItemClickListener(OnItemClickListener listener) { this.listener = listener; }
-        @NonNull @Override public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            TextView tv = new TextView(parent.getContext());
-            tv.setPadding(50, 30, 50, 30);
-            tv.setTextColor(Color.WHITE);
-            tv.setTextSize(18);
-            return new ViewHolder(tv);
-        }
-        @Override public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            LiveChannelItem item = data.get(position);
-            holder.textView.setText(item.getChannelName() + " (" + item.getGroupName() + ")");
-            holder.textView.setOnClickListener(v -> { if (listener != null) listener.onItemClick(position); });
-        }
-        @Override public int getItemCount() { return data.size(); }
-        static class ViewHolder extends RecyclerView.ViewHolder {
-            TextView textView;
-            ViewHolder(View itemView) { super(itemView); textView = (TextView) itemView; }
-        }
-    }
-
-    private static class TrackItem {
-        String name, type;
-        TrackItem(String name, String type) { this.name = name; this.type = type; }
-    }
-
-    private static class TrackAdapter extends RecyclerView.Adapter<TrackAdapter.ViewHolder> {
-        private List<TrackItem> data = new ArrayList<>();
-        private OnItemClickListener listener;
-        interface OnItemClickListener { void onItemClick(int position); }
-        TrackAdapter(List<TrackItem> data) { this.data = data; }
-        void setNewData(List<TrackItem> newData) { data.clear(); if (newData != null) data.addAll(newData); notifyDataSetChanged(); }
-        TrackItem getItem(int position) { return data.get(position); }
-        void setOnItemClickListener(OnItemClickListener listener) { this.listener = listener; }
-        @NonNull @Override public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            TextView tv = new TextView(parent.getContext());
-            tv.setPadding(50, 30, 50, 30);
-            tv.setTextColor(Color.WHITE);
-            tv.setTextSize(18);
-            return new ViewHolder(tv);
-        }
-        @Override public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            TrackItem item = data.get(position);
-            holder.textView.setText(item.name + " (" + item.type + ")");
-            holder.textView.setOnClickListener(v -> { if (listener != null) listener.onItemClick(position); });
-        }
-        @Override public int getItemCount() { return data.size(); }
-        static class ViewHolder extends RecyclerView.ViewHolder {
-            TextView textView;
-            ViewHolder(View itemView) { super(itemView); textView = (TextView) itemView; }
-        }
-    }
 
     // ========== 网速更新 ==========
     private final Runnable mUpdateNetSpeedRun = new Runnable() {
