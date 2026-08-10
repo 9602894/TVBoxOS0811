@@ -1575,7 +1575,7 @@ public class LivePlayActivity extends BaseActivity {
             Log.e("LivePlay", "lives reload error: " + e.getMessage());
         }
 
-        //  lives 也没有，从接口地址拉取完整配置
+        // 配置未加载，异步拉取
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (apiUrl == null || apiUrl.trim().isEmpty()) {
             Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
