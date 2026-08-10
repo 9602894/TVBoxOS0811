@@ -29,7 +29,7 @@ public class LiveChannelItem {
     public int sourceIndex = 0;
     public int sourceNum = 0;
     public boolean include_back = false;
-    
+
     // 酷9兼容字段
     private String groupName;
     private String epg;
