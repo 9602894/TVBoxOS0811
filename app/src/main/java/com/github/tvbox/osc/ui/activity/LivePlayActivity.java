@@ -1548,47 +1548,26 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     // ========== 修正 initLiveChannelList 使用反射 ==========
-    private void initLiveChannelList() {
-        ApiConfig api = ApiConfig.get();
-        List<LiveChannelGroup> list = api.getChannelGroupList();
-
-        if (list != null && !list.isEmpty()) {
-            applyChannelList(list);
+        private void initLiveChannelList() {
+        List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
+        if (list == null || list.isEmpty()) {
+            loadLiveConfigSimple();
             return;
         }
+        applyChannelList(list);
+    }
 
-        // 从已解析的 lives 配置加载
-        try {
-            java.lang.reflect.Method getLive = api.getClass().getMethod("getLive");
-            Object lives = getLive.invoke(api);
-            if (lives != null && lives instanceof com.google.gson.JsonArray 
-                    && ((com.google.gson.JsonArray)lives).size() > 0) {
-                java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
-                loadLives.invoke(api, lives);
-                list = api.getChannelGroupList();
-                if (list != null && !list.isEmpty()) {
-                    applyChannelList(list);
-                    return;
-                }
-            }
-        } catch (Exception e) {
-            Log.e("LivePlay", "lives reload error: " + e.getMessage());
-        }
-
-        // 配置未加载，异步拉取
-        String apiUrl = Hawk.get(HawkConfig.API_URL, "");
-        if (apiUrl == null || apiUrl.trim().isEmpty()) {
-            Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
-            return;
-        }
-
+    private void loadLiveConfigSimple() {
+        if (loadingLiveConfigOnEnter) return;
+        loadingLiveConfigOnEnter = true;
         showLoading();
-        api.loadConfig(false, new ApiConfig.LoadConfigCallback() {
+        ApiConfig.get().loadConfig(false, new ApiConfig.LoadConfigCallback() {
             @Override
             public void success() {
                 runOnUiThread(() -> {
+                    loadingLiveConfigOnEnter = false;
                     showSuccess();
-                    List<LiveChannelGroup> loaded = api.getChannelGroupList();
+                    List<LiveChannelGroup> loaded = ApiConfig.get().getChannelGroupList();
                     if (loaded != null && !loaded.isEmpty()) {
                         applyChannelList(loaded);
                     } else {
@@ -1599,23 +1578,28 @@ public class LivePlayActivity extends BaseActivity {
             @Override
             public void error(String msg) {
                 runOnUiThread(() -> {
+                    loadingLiveConfigOnEnter = false;
                     showSuccess();
                     Toast.makeText(LivePlayActivity.this, "加载失败: " + msg, Toast.LENGTH_SHORT).show();
                 });
             }
             @Override
             public void notice(String msg) {}
-        });
+        }, LivePlayActivity.this);
     }
 
     private void applyChannelList(List<LiveChannelGroup> list) {
         liveChannelGroupList.clear();
         liveChannelGroupList.addAll(list);
+        
         if (liveChannelGroupAdapter != null) {
             liveChannelGroupAdapter.setNewData(new ArrayList<>(liveChannelGroupList));
         }
-        int groupIndex = 0, channelIndex = 0;
+        
+        int groupIndex = 0;
+        int channelIndex = 0;
         String lastChannel = Hawk.get(HawkConfig.LIVE_CHANNEL, "");
+        
         outer:
         for (int g = 0; g < liveChannelGroupList.size(); g++) {
             LiveChannelGroup group = liveChannelGroupList.get(g);
@@ -1623,13 +1607,15 @@ public class LivePlayActivity extends BaseActivity {
             for (int c = 0; c < group.getLiveChannels().size(); c++) {
                 LiveChannelItem item = group.getLiveChannels().get(c);
                 if (item != null && item.getChannelName().equals(lastChannel)) {
-                    groupIndex = g; channelIndex = c; break outer;
+                    groupIndex = g;
+                    channelIndex = c;
+                    break outer;
                 }
             }
         }
+        
         playChannel(groupIndex, channelIndex, false);
     }
-
     private final Runnable mUpdateNetSpeedRun = new Runnable() {
         @Override
         public void run() {
