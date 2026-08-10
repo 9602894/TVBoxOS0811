@@ -1448,7 +1448,9 @@ public class ApiConfig {
     public String getSpider() {
         return spider;
     }
-
+    public String getEpgUrl() {
+    return Hawk.get(HawkConfig.EPG_URL, "");
+}
     public String getDanmaku() {
         return danmaku == null ? "" : danmaku;
     }
