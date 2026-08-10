@@ -1548,7 +1548,7 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     // ========== 修正 initLiveChannelList 使用反射 ==========
-        private void initLiveChannelList() {
+    private void initLiveChannelList() {
         List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
         if (list == null || list.isEmpty()) {
             loadLiveConfigSimple();
