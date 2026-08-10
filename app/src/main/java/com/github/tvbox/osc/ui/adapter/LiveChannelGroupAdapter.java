@@ -19,7 +19,7 @@ public class LiveChannelGroupAdapter extends BaseQuickAdapter<LiveChannelGroup, 
     }
 
     @Override
-    protected void convert(BaseViewHolder holder, LiveChannelItem item) {
+    protected void convert(BaseViewHolder holder, LiveChannelGroup item) {
         TextView tvGroupName = holder.getView(R.id.tvChannelGroupName);
         tvGroupName.setText(item.getGroupName());
         tvGroupName.setSelected(true);
