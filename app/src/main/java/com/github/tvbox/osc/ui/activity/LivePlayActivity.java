@@ -183,6 +183,7 @@ public class LivePlayActivity extends BaseActivity {
     private int selectedChannelNumber = 0;
     private TextView tvSelectedChannel;
     private String logoUrl = "";
+    private boolean loadingLiveConfigOnEnter = false;
 
     // 添加缺失的成员变量
     private TextView tv_currentpos;
@@ -1547,42 +1548,76 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     // ========== 修正 initLiveChannelList 使用反射 ==========
-    private void initLiveChannelList() {
-        // 使用反射获取直播频道列表（兼容酷9和TVBox）
-        try {
-            Object apiConfig = ApiConfig.get();
-            java.lang.reflect.Method method = apiConfig.getClass().getMethod("getLiveChannelGroupList");
-            liveChannelGroupList = (List<LiveChannelGroup>) method.invoke(apiConfig);
-        } catch (Exception e) {
-            Log.e("LivePlay", "getLiveChannelGroupList error", e);
-            liveChannelGroupList = new ArrayList<>();
-        }
-        if (liveChannelGroupList == null || liveChannelGroupList.isEmpty()) {
-            Toast.makeText(this, "暂无直播频道，请检查直播源配置", Toast.LENGTH_SHORT).show();
+        private void initLiveChannelList() {
+        List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
+        if (list == null || list.isEmpty()) {
+            loadLiveConfigSimple();
             return;
         }
-        int lastGroup = Hawk.get(HawkConfig.LIVE_GROUP_INDEX, 0);
-        int lastChannel = Hawk.get("live_channel_index", 0);
-        if (lastGroup >= liveChannelGroupList.size()) lastGroup = 0;
-        LiveChannelGroup group = liveChannelGroupList.get(lastGroup);
-        if (group == null || group.getLiveChannels() == null || lastChannel >= group.getLiveChannels().size()) {
-            lastChannel = 0;
-        }
-        playChannel(lastGroup, lastChannel, true);
+        applyChannelList(list);
     }
 
-    private final Runnable mUpdateTimeRun = new Runnable() {
-        @Override
-        public void run() {
-            if (tvTime != null) {
-                @SuppressLint("SimpleDateFormat") SimpleDateFormat sdf = new SimpleDateFormat("HH:mm");
-                tvTime.setText(sdf.format(new Date()));
-                tvTime.setVisibility(View.VISIBLE);
+    private void loadLiveConfigSimple() {
+        if (loadingLiveConfigOnEnter) return;
+        loadingLiveConfigOnEnter = true;
+        showLoading();
+        ApiConfig.get().loadLiveConfig(true, new ApiConfig.LoadConfigCallback() {
+            @Override
+            public void success() {
+                mHandler.post(() -> {
+                    loadingLiveConfigOnEnter = false;
+                    showSuccess();
+                    List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
+                    if (list != null && !list.isEmpty()) {
+                        applyChannelList(list);
+                    } else {
+                        Toast.makeText(LivePlayActivity.this, "暂无直播频道，请检查配置", Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
-            mHandler.postDelayed(this, 1000);
-        }
-    };
+            @Override
+            public void error(String msg) {
+                mHandler.post(() -> {
+                    loadingLiveConfigOnEnter = false;
+                    showSuccess();
+                    Toast.makeText(LivePlayActivity.this, "加载直播配置失败: " + msg, Toast.LENGTH_SHORT).show();
+                });
+            }
+            @Override
+            public void notice(String msg) {
+                mHandler.post(() -> Toast.makeText(LivePlayActivity.this, msg, Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
 
+    private void applyChannelList(List<LiveChannelGroup> list) {
+        liveChannelGroupList.clear();
+        liveChannelGroupList.addAll(list);
+        
+        if (liveChannelGroupAdapter != null) {
+            liveChannelGroupAdapter.setNewData(new ArrayList<>(liveChannelGroupList));
+        }
+        
+        int groupIndex = 0;
+        int channelIndex = 0;
+        String lastChannel = Hawk.get(HawkConfig.LIVE_CHANNEL, "");
+        
+        outer:
+        for (int g = 0; g < liveChannelGroupList.size(); g++) {
+            LiveChannelGroup group = liveChannelGroupList.get(g);
+            if (group == null || group.getLiveChannels() == null) continue;
+            for (int c = 0; c < group.getLiveChannels().size(); c++) {
+                LiveChannelItem item = group.getLiveChannels().get(c);
+                if (item != null && item.getChannelName().equals(lastChannel)) {
+                    groupIndex = g;
+                    channelIndex = c;
+                    break outer;
+                }
+            }
+        }
+        
+        playChannel(groupIndex, channelIndex, false);
+    }
     private final Runnable mUpdateNetSpeedRun = new Runnable() {
         @Override
         public void run() {
