@@ -1549,59 +1549,46 @@ public class LivePlayActivity extends BaseActivity {
 
     // ========== 修正 initLiveChannelList 使用反射 ==========
     private void initLiveChannelList() {
-        List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
+        ApiConfig api = ApiConfig.get();
+        List<LiveChannelGroup> list = api.getChannelGroupList();
+
+        // 如果频道列表为空，尝试从已加载的配置中解析 lives
         if (list == null || list.isEmpty()) {
-            loadLiveConfigSimple();
+            try {
+                java.lang.reflect.Method getLiveMethod = api.getClass().getMethod("getLive");
+                Object livesObj = getLiveMethod.invoke(api);
+                if (livesObj != null) {
+                    com.google.gson.JsonArray livesArray = (com.google.gson.JsonArray) livesObj;
+                    if (livesArray.size() > 0) {
+                        java.lang.reflect.Method loadLivesMethod = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
+                        loadLivesMethod.invoke(api, livesArray);
+                        list = api.getChannelGroupList();
+                    }
+                }
+            } catch (Exception e) {
+                Log.e("LivePlay", "reload lives error", e);
+            }
+        }
+
+        if (list == null || list.isEmpty()) {
+            Toast.makeText(this, "暂无直播频道，请先在首页加载配置", Toast.LENGTH_LONG).show();
             return;
         }
         applyChannelList(list);
     }
 
-    private void loadLiveConfigSimple() {
-        if (loadingLiveConfigOnEnter) return;
-        loadingLiveConfigOnEnter = true;
-        showLoading();
-        ApiConfig.get().loadLiveConfig(true, new ApiConfig.LoadConfigCallback() {
-            @Override
-            public void success() {
-                mHandler.post(() -> {
-                    loadingLiveConfigOnEnter = false;
-                    showSuccess();
-                    List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
-                    if (list != null && !list.isEmpty()) {
-                        applyChannelList(list);
-                    } else {
-                        Toast.makeText(LivePlayActivity.this, "暂无直播频道，请检查配置", Toast.LENGTH_SHORT).show();
-                    }
-                });
-            }
-            @Override
-            public void error(String msg) {
-                mHandler.post(() -> {
-                    loadingLiveConfigOnEnter = false;
-                    showSuccess();
-                    Toast.makeText(LivePlayActivity.this, "加载直播配置失败: " + msg, Toast.LENGTH_SHORT).show();
-                });
-            }
-            @Override
-            public void notice(String msg) {
-                mHandler.post(() -> Toast.makeText(LivePlayActivity.this, msg, Toast.LENGTH_SHORT).show());
-            }
-        });
-    }
-
     private void applyChannelList(List<LiveChannelGroup> list) {
         liveChannelGroupList.clear();
         liveChannelGroupList.addAll(list);
-        
+
         if (liveChannelGroupAdapter != null) {
             liveChannelGroupAdapter.setNewData(new ArrayList<>(liveChannelGroupList));
         }
-        
+
         int groupIndex = 0;
         int channelIndex = 0;
         String lastChannel = Hawk.get(HawkConfig.LIVE_CHANNEL, "");
-        
+
         outer:
         for (int g = 0; g < liveChannelGroupList.size(); g++) {
             LiveChannelGroup group = liveChannelGroupList.get(g);
@@ -1615,9 +1602,10 @@ public class LivePlayActivity extends BaseActivity {
                 }
             }
         }
-        
+
         playChannel(groupIndex, channelIndex, false);
     }
+
     private final Runnable mUpdateNetSpeedRun = new Runnable() {
         @Override
         public void run() {
