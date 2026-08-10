@@ -1,12 +1,8 @@
 package com.github.tvbox.osc.bean;
 
-import com.github.tvbox.osc.util.HawkConfig;
-import com.orhanobut.hawk.Hawk;
-
 import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
-import java.util.ArrayList;
 import java.util.Date;
 import java.util.TimeZone;
 
@@ -24,9 +20,10 @@ public class Epginfo {
     public int index;
     public Date epgDate;
     public String currentEpgDate = null;
+    public String desc = "";
     SimpleDateFormat timeFormat = new SimpleDateFormat("yyyy-MM-dd");
 
-    public Epginfo(Date Date,String str, Date date, String str1, String str2,int pos) {
+    public Epginfo(Date Date, String str, Date date, String str1, String str2, int pos) {
         epgDate = Date;
         currentEpgDate = timeFormat.format(epgDate);
         title = str;
@@ -51,4 +48,51 @@ public class Epginfo {
         datestart = Integer.parseInt(start.replace(":", ""));
         dateend = Integer.parseInt(end.replace(":", ""));
     }
+
+    // ========== 酷9兼容构造和方法 ==========
+    public Epginfo() {
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setStart(String start) {
+        this.start = start;
+        this.originStart = start;
+        try {
+            this.datestart = Integer.parseInt(start.replace(":", ""));
+        } catch (Exception ignored) {
+        }
+    }
+
+    public String getStart() {
+        return start;
+    }
+
+    public void setEnd(String end) {
+        this.end = end;
+        this.originEnd = end;
+        try {
+            this.dateend = Integer.parseInt(end.replace(":", ""));
+        } catch (Exception ignored) {
+        }
+    }
+
+    public String getEnd() {
+        return end;
+    }
+
+    public void setDesc(String desc) {
+        this.desc = desc;
+    }
+
+    public String getDesc() {
+        return desc;
+    }
+    // ========== 兼容方法结束 ==========
 }
