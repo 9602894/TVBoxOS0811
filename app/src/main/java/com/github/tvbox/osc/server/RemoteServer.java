@@ -214,7 +214,7 @@ public class RemoteServer extends NanoHTTPD {
                         String hd = session.getHeaders().get("content-type");
                         if (hd != null) {
                             if (hd.toLowerCase().contains("multipart/form-data") && !hd.toLowerCase().contains("charset=")) {
-                                Matcher matcher = getPattern("[ \|\t]*(boundary[ \|\t]*=[ \|\t]*['\|"]?[^\"^'^;^,]*['\|"]?)", Pattern.CASE_INSENSITIVE).matcher(hd);
+                                Matcher matcher = getPattern("[ \\|\\t]*(boundary[ \\|\\t]*=[ \\|\\t]*['\\\"]?[^\\\"^'^;^,]*['\\\"]?)", Pattern.CASE_INSENSITIVE).matcher(hd);
                                 String boundary = matcher.find() ? matcher.group(1) : null;
                                 if (boundary != null) {
                                     session.getHeaders().put("content-type", "multipart/form-data; charset=utf-8; " + boundary);
@@ -364,12 +364,12 @@ public class RemoteServer extends NanoHTTPD {
     }
 
     private boolean isNumeric(String text) {
-        return !TextUtils.isEmpty(text) && text.matches("\d+");
+        return !TextUtils.isEmpty(text) && text.matches("\\d+");
     }
 
     private String extractNumber(String text) {
         if (TextUtils.isEmpty(text)) return "";
-        Matcher matcher = getPattern("\d+").matcher(text);
+        Matcher matcher = getPattern("\\d+").matcher(text);
         return matcher.find() ? matcher.group() : "";
     }
 
