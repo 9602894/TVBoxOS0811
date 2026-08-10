@@ -59,10 +59,10 @@ public class HawkConfig {
     public static final String DANMU_SIZE_SCALE = "danmu_size_scale";
     public static final String DANMU_RANDOM_COLOR = "danmu_random_color";
     public static final String DANMU_API = "danmu_api";
-    
+
     // ========== 酷9兼容常量 ==========
     public static final String LIVE_PLAYER_TYPE = "live_player_type";
     // ========== 兼容常量结束 ==========
-    
+
     public static boolean hotVodDelete;
 }
