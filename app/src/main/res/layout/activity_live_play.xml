@@ -271,7 +271,6 @@
 
         </LinearLayout>
     </LinearLayout>
-<!--右侧EPG列表-->
 
     <LinearLayout
         android:id="@+id/tvRightSettingLayout"
@@ -373,7 +372,6 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <!--底部EPG-->
     <RelativeLayout
         android:layout_gravity="bottom|center"
         android:gravity="center_vertical"
@@ -468,7 +466,6 @@
             android:layout_alignLeft="@+id/tv_channel_bottom_number"
             android:layout_alignEnd="@+id/tv_channel_bottom_number"
             android:layout_alignRight="@+id/tv_channel_bottom_number"
-
             android:layout_alignParentBottom="true"
             android:layout_gravity="center|bottom"
             android:layout_marginStart="5dp"
@@ -632,7 +629,6 @@
         </RelativeLayout>
     </RelativeLayout>
 
-
     <TextView
         android:id="@+id/tv_shownum"
         android:layout_width="wrap_content"
@@ -640,7 +636,6 @@
         android:layout_gravity="end|top"
         android:layout_margin="20dp"
         android:paddingTop="8dp"/>
-    <!--右上角回看-->
 
     <TextView
         android:id="@+id/tv_showTime"
@@ -649,7 +644,6 @@
         android:layout_gravity="end|top"
         android:layout_margin="20dp"
         android:paddingTop="8dp"/>
-    <!--右上角加载中-->
 
     <LinearLayout
         android:layout_gravity="center|left|top"
@@ -658,7 +652,6 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content" />
 
-    <!--右上角频道名称-->
     <RelativeLayout
         android:layout_gravity="center|right|top"
         android:orientation="vertical"
@@ -773,7 +766,6 @@
         android:elevation="10dp"
         android:background="@android:color/transparent">
 
-        <!-- 暂停/播放按钮：位于 ll_play 中，避免与进度条重叠 -->
         <LinearLayout
             android:id="@+id/ll_play"
             android:layout_width="match_parent"
@@ -790,7 +782,6 @@
                 android:background="@drawable/vod_pause" />
         </LinearLayout>
 
-        <!-- 进度条和时长：位于 progress_container 中 -->
         <LinearLayout
             android:id="@+id/progress_container"
             android:layout_width="match_parent"
@@ -828,7 +819,6 @@
                 android:textAllCaps="true"
                 android:includeFontPadding="false"/>
 
-            <!-- 使用 LinearLayout 包裹 SeekBar，避免 weight 导致的问题 -->
             <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
