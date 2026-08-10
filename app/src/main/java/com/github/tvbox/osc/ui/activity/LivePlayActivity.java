@@ -161,7 +161,6 @@ public class LivePlayActivity extends BaseActivity {
     private LiveEpgDateAdapter liveEpgDateAdapter;
     private LiveEpgAdapter epgListAdapter;
 
-    // 保留但不再使用
     private List<LiveDayListGroup> liveDayList = new ArrayList<>();
     private List<LiveEpgDate> liveEpgDateList = new ArrayList<>();
 
@@ -185,6 +184,7 @@ public class LivePlayActivity extends BaseActivity {
     private TextView tvSelectedChannel;
     private String logoUrl = "";
 
+    // 添加缺失的成员变量
     private TextView tv_currentpos;
     private TextView tv_duration;
 
@@ -1547,14 +1547,16 @@ public class LivePlayActivity extends BaseActivity {
         liveSettingGroupList.add(scaleGroup);
     }
 
-    // ========== 修正 initLiveChannelList 使用 try-catch ==========
+    // ========== 修正 initLiveChannelList 使用反射 ==========
     private void initLiveChannelList() {
+        // 使用反射获取直播频道列表（兼容酷9和TVBox）
         try {
-            liveChannelGroupList = ApiConfig.get().getLiveChannelGroupList();
+            Object apiConfig = ApiConfig.get();
+            java.lang.reflect.Method method = apiConfig.getClass().getMethod("getLiveChannelGroupList");
+            liveChannelGroupList = (List<LiveChannelGroup>) method.invoke(apiConfig);
         } catch (Exception e) {
-            Log.e("LivePlay", "initLiveChannelList error", e);
+            Log.e("LivePlay", "getLiveChannelGroupList error", e);
             liveChannelGroupList = new ArrayList<>();
-            // 可选：添加一个默认组或从其他源加载
         }
         if (liveChannelGroupList == null || liveChannelGroupList.isEmpty()) {
             Toast.makeText(this, "暂无直播频道，请检查直播源配置", Toast.LENGTH_SHORT).show();
