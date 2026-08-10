@@ -506,7 +506,7 @@ public class LivePlayActivity extends BaseActivity {
     private void parseEpg(String xml, LiveChannelItem channel) {
         currentEpgList.clear();
         try {
-            Pattern pattern = Pattern.compile("<programme start=\\"(.*?)\\" stop=\\"(.*?)\\".*?><title>(.*?)</title>");
+            Pattern pattern = Pattern.compile("<programme start=\"(.*?)\" stop=\"(.*?)\".*?><title>(.*?)</title>");
             Matcher matcher = pattern.matcher(xml);
             while (matcher.find()) {
                 Epginfo epg = new Epginfo();
