@@ -870,15 +870,17 @@ public class LivePlayActivity extends BaseActivity {
         return lower.contains("无节目") || lower.contains("暂无") || lower.contains("no epg") || lower.contains("not available");
     }
 
+    // ========== 此处为修正后的 normalizeEpgChannelName 方法 ==========
     private String normalizeEpgChannelName(String name) {
         if (name == null) return "";
         return name.replaceAll("CCTV-", "CCTV")
-                   .replaceAll("\+", "")
+                   .replaceAll("\\+", "")      // 修正：原 "\+" -> "\\+"
                    .replaceAll("HD", "")
-                   .replaceAll("\d+K", "")
-                   .replaceAll("\s+", "")
+                   .replaceAll("\\d+K", "")    // 修正：原 "\d+K" -> "\\d+K"
+                   .replaceAll("\\s+", "")     // 修正：原 "\s+" -> "\\s+"
                    .trim();
     }
+    // ========== 修正结束 ==========
 
     private void showBottomEpg() {
         if (epgdata == null || epgdata.isEmpty()) {
