@@ -161,8 +161,9 @@ public class LivePlayActivity extends BaseActivity {
     private LiveEpgDateAdapter liveEpgDateAdapter;
     private LiveEpgAdapter epgListAdapter;
 
+    // 保留但不再使用
     private List<LiveDayListGroup> liveDayList = new ArrayList<>();
-    private List<LiveEpgDate> liveEpgDateList = new ArrayList<>(); // 用于适配器
+    private List<LiveEpgDate> liveEpgDateList = new ArrayList<>();
 
     public static SimpleDateFormat formatDate = new SimpleDateFormat("yyyy-MM-dd");
     public static SimpleDateFormat formatDate1 = new SimpleDateFormat("MM-dd");
@@ -184,7 +185,6 @@ public class LivePlayActivity extends BaseActivity {
     private TextView tvSelectedChannel;
     private String logoUrl = "";
 
-    // 添加缺失的成员变量
     private TextView tv_currentpos;
     private TextView tv_duration;
 
@@ -1449,16 +1449,35 @@ public class LivePlayActivity extends BaseActivity {
         });
     }
 
+    // ========== 修正 initDayList 使用 LiveEpgDate ==========
     private void initDayList() {
         liveDayList.clear();
         liveEpgDateList.clear();
         Calendar calendar = Calendar.getInstance();
         calendar.setTime(new Date());
         for (int i = 0; i < 8; i++) {
-            // 使用 LiveEpgDate 替代 LiveDayListGroup 以匹配适配器
             LiveEpgDate dateItem = new LiveEpgDate();
-            dateItem.setDatePresented(formatDate1.format(calendar.getTime()));
-            dateItem.setDate(formatDate.format(calendar.getTime()));
+            // 使用反射设置 date 字段（兼容不同版本的 LiveEpgDate）
+            try {
+                java.lang.reflect.Method setDateMethod = LiveEpgDate.class.getMethod("setDate", String.class);
+                setDateMethod.invoke(dateItem, formatDate.format(calendar.getTime()));
+            } catch (Exception e) {
+                // 尝试直接设置字段
+                try {
+                    java.lang.reflect.Field dateField = LiveEpgDate.class.getField("date");
+                    dateField.set(dateItem, formatDate.format(calendar.getTime()));
+                } catch (Exception e2) {
+                    // 忽略，可能该字段不存在
+                    Log.e("LivePlay", "setDate failed", e2);
+                }
+            }
+            // 设置显示日期
+            try {
+                java.lang.reflect.Method setPresentedMethod = LiveEpgDate.class.getMethod("setDatePresented", String.class);
+                setPresentedMethod.invoke(dateItem, formatDate1.format(calendar.getTime()));
+            } catch (Exception e) {
+                // 忽略
+            }
             liveEpgDateList.add(dateItem);
             calendar.add(Calendar.DAY_OF_MONTH, -1);
         }
@@ -1528,19 +1547,21 @@ public class LivePlayActivity extends BaseActivity {
         liveSettingGroupList.add(scaleGroup);
     }
 
+    // ========== 修正 initLiveChannelList 使用 try-catch ==========
     private void initLiveChannelList() {
         try {
             liveChannelGroupList = ApiConfig.get().getLiveChannelGroupList();
         } catch (Exception e) {
             Log.e("LivePlay", "initLiveChannelList error", e);
             liveChannelGroupList = new ArrayList<>();
+            // 可选：添加一个默认组或从其他源加载
         }
         if (liveChannelGroupList == null || liveChannelGroupList.isEmpty()) {
-            Toast.makeText(this, "暂无直播频道", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "暂无直播频道，请检查直播源配置", Toast.LENGTH_SHORT).show();
             return;
         }
         int lastGroup = Hawk.get(HawkConfig.LIVE_GROUP_INDEX, 0);
-        int lastChannel = Hawk.get("live_channel_index", 0); // fallback
+        int lastChannel = Hawk.get("live_channel_index", 0);
         if (lastGroup >= liveChannelGroupList.size()) lastGroup = 0;
         LiveChannelGroup group = liveChannelGroupList.get(lastGroup);
         if (group == null || group.getLiveChannels() == null || lastChannel >= group.getLiveChannels().size()) {
