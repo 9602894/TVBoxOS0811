@@ -183,6 +183,19 @@ public class LivePlayActivity extends BaseActivity {
     private int selectedChannelNumber = 0;
     private TextView tvSelectedChannel;
     private String logoUrl = "";
+    // 酷9新增模块
+    private ShortcutsMenuAdapter shortcutsMenuAdapter;
+    private SearchChannelAdapter searchChannelAdapter;
+    private TrackListAdapter trackListAdapter;
+    private TvRecyclerView mShortcutsMenuView;
+    private TvRecyclerView mSearchChannelView;
+    private View dialogShortcutsMenu;
+    private View dialogSearchChannel;
+    private View dialogTrackList;
+    private boolean isSettingMenuVisible = false;
+    private boolean isShortcutsMenuVisible = false;
+    private boolean isSearchVisible = false;
+
     private boolean loadingLiveConfigOnEnter = false;
 
     // 添加缺失的成员变量
@@ -338,6 +351,10 @@ public class LivePlayActivity extends BaseActivity {
         initLiveChannelList();
         initLiveSettingGroupList();
         Hawk.put(HawkConfig.PLAYER_IS_LIVE, true);
+        initShortcutsMenuView();
+        initSearchChannelView();
+        initTrackListView();
+
     }
 
     // ========== EPG 相关方法 ==========
@@ -1395,15 +1412,35 @@ public class LivePlayActivity extends BaseActivity {
         if (item == null) return;
         int itemIndex = item.getItemIndex();
         switch (itemIndex) {
-            case 0: // 换源
+            case 0: // 换源 / 线路选择
+                if (currentLiveChannelItem != null) {
+                    int nextSource = currentLiveChannelItem.getSourceIndex() + 1;
+                    if (nextSource >= currentLiveChannelItem.getSourceNum()) nextSource = 0;
+                    currentLiveChannelItem.setSourceIndex(nextSource);
+                    playChannel(currentChannelGroupIndex, currentLiveChannelIndex, false);
+                    Toast.makeText(this, "已切换至线路" + (nextSource + 1), Toast.LENGTH_SHORT).show();
+                }
                 break;
-            case 1: // 换线路
+            case 1: // 画面比例
+                // TODO: 调用播放器切换画面比例
+                Toast.makeText(this, "画面比例", Toast.LENGTH_SHORT).show();
                 break;
-            case 2: // 画面比例
+            case 2: // 解码方式
+                // TODO: 调用播放器切换解码方式
+                Toast.makeText(this, "解码方式", Toast.LENGTH_SHORT).show();
                 break;
-            case 3: // 解码方式
+            case 3: // 超时换源
+                // TODO: 设置超时时间
+                Toast.makeText(this, "超时换源", Toast.LENGTH_SHORT).show();
                 break;
-            case 4: // 超时换源
+            case 4: // 显示/隐藏 EPG
+                if (divEpg != null) {
+                    if (divEpg.getVisibility() == View.VISIBLE) {
+                        divEpg.setVisibility(View.GONE);
+                    } else {
+                        divEpg.setVisibility(View.VISIBLE);
+                    }
+                }
                 break;
             default:
                 break;
@@ -1412,6 +1449,7 @@ public class LivePlayActivity extends BaseActivity {
             tvRightSettingLayout.setVisibility(View.INVISIBLE);
         }
     }
+
 
     private void initEpgDateView() {
         if (mEpgDateGridView == null) return;
@@ -1555,7 +1593,6 @@ public class LivePlayActivity extends BaseActivity {
             applyChannelList(list);
             return;
         }
-
         // 尝试从已解析的 lives 配置恢复
         try {
             java.lang.reflect.Method getLive = api.getClass().getMethod("getLive");
@@ -1573,7 +1610,6 @@ public class LivePlayActivity extends BaseActivity {
         } catch (Exception e) {
             Log.e("LivePlay", "getLive restore failed: " + e.getMessage());
         }
-
         // 异步加载直播源
         loadLiveSourceAsync();
     }
@@ -1584,12 +1620,9 @@ public class LivePlayActivity extends BaseActivity {
             Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
             return;
         }
-
         showLoading();
-
         new Thread(() -> {
             try {
-                // 方案1: 如果接口地址是JSON配置，尝试完整加载
                 String configJson = fetchContent(apiUrl);
                 if (configJson != null && configJson.trim().startsWith("{")) {
                     com.google.gson.JsonObject config = new com.google.gson.JsonParser().parse(configJson).getAsJsonObject();
@@ -1599,8 +1632,6 @@ public class LivePlayActivity extends BaseActivity {
                         return;
                     }
                 }
-
-                // 方案2: 直接把接口地址当作 txt/m3u 直播源加载
                 com.google.gson.JsonArray livesArray = new com.google.gson.JsonArray();
                 com.google.gson.JsonObject liveObj = new com.google.gson.JsonObject();
                 liveObj.addProperty("name", "直播源");
@@ -1608,13 +1639,11 @@ public class LivePlayActivity extends BaseActivity {
                 liveObj.addProperty("url", apiUrl);
                 livesArray.add(liveObj);
                 loadLivesAndApply(livesArray);
-
             } catch (Exception e) {
                 Log.e("LivePlay", "load source error", e);
                 runOnUiThread(() -> {
                     showSuccess();
-                    Toast.makeText(LivePlayActivity.this, 
-                        "加载失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(LivePlayActivity.this, "加载失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
                 });
             }
         }).start();
@@ -1641,7 +1670,6 @@ public class LivePlayActivity extends BaseActivity {
         final ApiConfig api = ApiConfig.get();
         java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
         loadLives.invoke(api, livesArray);
-
         final List<LiveChannelGroup> list = api.getChannelGroupList();
         runOnUiThread(() -> {
             showSuccess();
@@ -1649,10 +1677,36 @@ public class LivePlayActivity extends BaseActivity {
                 Log.d("LivePlay", "Channels loaded: " + list.size());
                 applyChannelList(list);
             } else {
-                Toast.makeText(LivePlayActivity.this, 
-                    "未解析到频道，请检查直播源格式", Toast.LENGTH_LONG).show();
+                Toast.makeText(LivePlayActivity.this, "未解析到频道，请检查直播源格式", Toast.LENGTH_LONG).show();
             }
         });
+    }
+
+    private void initShortcutsMenuView() {
+        // TODO: 在布局中确保有 R.id.mShortcutsMenuView
+        // mShortcutsMenuView = findViewById(R.id.mShortcutsMenuView);
+        // if (mShortcutsMenuView != null) {
+        //     mShortcutsMenuView.setHasFixedSize(true);
+        //     mShortcutsMenuView.setLayoutManager(new V7LinearLayoutManager(this, 1, false));
+        //     shortcutsMenuAdapter = new ShortcutsMenuAdapter();
+        //     mShortcutsMenuView.setAdapter(shortcutsMenuAdapter);
+        // }
+    }
+
+    private void initSearchChannelView() {
+        // TODO: 在布局中确保有 R.id.mSearchChannelView
+        // mSearchChannelView = findViewById(R.id.mSearchChannelView);
+        // if (mSearchChannelView != null) {
+        //     mSearchChannelView.setHasFixedSize(true);
+        //     mSearchChannelView.setLayoutManager(new V7LinearLayoutManager(this, 1, false));
+        //     searchChannelAdapter = new SearchChannelAdapter();
+        //     mSearchChannelView.setAdapter(searchChannelAdapter);
+        // }
+    }
+
+    private void initTrackListView() {
+        // TODO: 在布局中确保有 R.id.mTrackListView
+        // trackListAdapter = new TrackListAdapter();
     }
 
     private final Runnable mUpdateNetSpeedRun = new Runnable() {
