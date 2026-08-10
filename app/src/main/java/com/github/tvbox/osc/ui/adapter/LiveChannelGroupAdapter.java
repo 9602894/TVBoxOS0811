@@ -10,12 +10,6 @@ import com.github.tvbox.osc.bean.LiveChannelGroup;
 
 import java.util.ArrayList;
 
-
-/**
- * @author pj567
- * @date :2021/1/12
- * @description:
- */
 public class LiveChannelGroupAdapter extends BaseQuickAdapter<LiveChannelGroup, BaseViewHolder> {
     private int selectedGroupIndex = -1;
     private int focusedGroupIndex = -1;
@@ -25,7 +19,7 @@ public class LiveChannelGroupAdapter extends BaseQuickAdapter<LiveChannelGroup, 
     }
 
     @Override
-    protected void convert(BaseViewHolder holder, LiveChannelGroup item) {
+    protected void convert(BaseViewHolder holder, LiveChannelItem item) {
         TextView tvGroupName = holder.getView(R.id.tvChannelGroupName);
         tvGroupName.setText(item.getGroupName());
         tvGroupName.setSelected(true);
@@ -45,6 +39,12 @@ public class LiveChannelGroupAdapter extends BaseQuickAdapter<LiveChannelGroup, 
         notifyGroupChanged(preSelectedGroupIndex);
         notifyGroupChanged(this.selectedGroupIndex);
     }
+
+    // ========== 酷9兼容方法 ==========
+    public void setSelectedPosition(int position) {
+        setSelectedGroupIndex(position);
+    }
+    // ========== 兼容方法结束 ==========
 
     public int getSelectedGroupIndex() {
         return selectedGroupIndex;
