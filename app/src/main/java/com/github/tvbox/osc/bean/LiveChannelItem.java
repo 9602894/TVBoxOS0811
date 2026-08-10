@@ -4,23 +4,11 @@ import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Objects;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
-/**
- * @author pj567
- * @date :2021/1/12
- * @description:
- */
 public class LiveChannelItem {
-    /**
-     * channelIndex : 频道索引号
-     * channelNum : 频道名称
-     * channelSourceNames : 频道源名称
-     * channelUrls : 频道源地址
-     * sourceIndex : 频道源索引
-     * sourceNum : 频道源总数
-     */
     private int channelIndex;
     private int channelNum;
     private String channelName;
@@ -34,13 +22,17 @@ public class LiveChannelItem {
     private String channelTvgId;
     private String channelTvgName;
     private JsonObject channelCatchup;
-    private Map<String, String> channelHeader;
+    private Map channelHeader;
     private Integer channelParse;
-    private ArrayList<String> channelSourceNames;
-    private ArrayList<String> channelUrls;
+    private ArrayList channelSourceNames;
+    private ArrayList channelUrls;
     public int sourceIndex = 0;
     public int sourceNum = 0;
     public boolean include_back = false;
+    
+    // 酷9兼容字段
+    private String groupName;
+    private String epg;
 
     public void setinclude_back(boolean include_back) {
         this.include_back = include_back;
@@ -158,12 +150,12 @@ public class LiveChannelItem {
         return channelCatchup != null && channelCatchup.entrySet().size() > 0;
     }
 
-    public void setChannelHeader(Map<String, String> channelHeader) {
+    public void setChannelHeader(Map channelHeader) {
         this.channelHeader = channelHeader;
     }
 
-    public Map<String, String> getChannelHeader() {
-        return channelHeader == null ? new HashMap<String, String>() : channelHeader;
+    public Map getChannelHeader() {
+        return channelHeader == null ? new HashMap() : channelHeader;
     }
 
     public void setChannelParse(Integer channelParse) {
@@ -174,26 +166,61 @@ public class LiveChannelItem {
         return channelParse == null ? 0 : channelParse.intValue();
     }
 
-    public Map<String, String> getHeaders() {
-        Map<String, String> headers = new HashMap<>(getChannelHeader());
+    public Map getHeaders() {
+        Map headers = new HashMap<>(getChannelHeader());
         if (!getChannelUa().isEmpty()) headers.put("User-Agent", getChannelUa());
         if (!getChannelOrigin().isEmpty()) headers.put("Origin", getChannelOrigin());
         if (!getChannelReferer().isEmpty()) headers.put("Referer", getChannelReferer());
         return headers;
     }
 
-    public ArrayList<String> getChannelUrls() {
+    public ArrayList getChannelUrls() {
         return channelUrls;
     }
 
-    public void setChannelUrls(ArrayList<String> channelUrls) {
+    public void setChannelUrls(ArrayList channelUrls) {
         this.channelUrls = channelUrls;
-        sourceNum = channelUrls.size();
+        sourceNum = channelUrls == null ? 0 : channelUrls.size();
     }
+
+    // ========== 酷9兼容方法 ==========
+    public List<String> getUrlList() {
+        if (channelUrls == null) return new ArrayList<>();
+        return new ArrayList<>(channelUrls);
+    }
+
+    public void setUrlList(List<String> urls) {
+        if (urls instanceof ArrayList) {
+            this.channelUrls = (ArrayList) urls;
+        } else {
+            this.channelUrls = new ArrayList<>(urls);
+        }
+        sourceNum = channelUrls == null ? 0 : channelUrls.size();
+    }
+
+    public String getEpg() {
+        return epg != null ? epg : getChannelEpg();
+    }
+
+    public void setEpg(String epg) {
+        this.epg = epg;
+        this.channelEpg = epg;
+    }
+
+    public String getGroupName() {
+        return groupName;
+    }
+
+    public void setGroupName(String groupName) {
+        this.groupName = groupName;
+    }
+    // ========== 兼容方法结束 ==========
+
     public void preSource() {
         sourceIndex--;
         if (sourceIndex < 0) sourceIndex = sourceNum - 1;
     }
+
     public void nextSource() {
         sourceIndex++;
         if (sourceIndex == sourceNum) sourceIndex = 0;
@@ -208,23 +235,25 @@ public class LiveChannelItem {
     }
 
     public String getUrl() {
-        return channelUrls.get(sourceIndex);
+        if (channelUrls == null || channelUrls.isEmpty()) return "";
+        return (String) channelUrls.get(sourceIndex);
     }
 
     public int getSourceNum() {
         return sourceNum;
     }
 
-    public ArrayList<String> getChannelSourceNames() {
+    public ArrayList getChannelSourceNames() {
         return channelSourceNames;
     }
 
-    public void setChannelSourceNames(ArrayList<String> channelSourceNames) {
+    public void setChannelSourceNames(ArrayList channelSourceNames) {
         this.channelSourceNames = channelSourceNames;
     }
 
     public String getSourceName() {
-        return channelSourceNames.get(sourceIndex);
+        if (channelSourceNames == null || channelSourceNames.isEmpty()) return "";
+        return (String) channelSourceNames.get(sourceIndex);
     }
 
     public boolean isEmptyCatchup() {
@@ -237,11 +266,11 @@ public class LiveChannelItem {
         if (o == null || getClass() != o.getClass()) return false;
         LiveChannelItem that = (LiveChannelItem) o;
         return Objects.equals(channelName, that.channelName)
-                && Objects.equals(channelUrls.get(sourceIndex), that.getUrl());
+                && Objects.equals(getUrl(), that.getUrl());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(channelName, channelUrls.get(sourceIndex));
+        return Objects.hash(channelName, getUrl());
     }
 }
