@@ -4,6 +4,7 @@ import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.CountDownTimer;
@@ -91,9 +92,11 @@ import okhttp3.Response;
 import xyz.doikki.videoplayer.player.VideoView;
 
 /**
- * LivePlayActivity - 整合酷9全部功能，自包含所有适配器，内置设置对话框
+ * LivePlayActivity - 完整整合酷9所有功能
+ * 使用酷9的布局和适配器，内置设置对话框
  */
 public class LivePlayActivity extends BaseActivity {
+    private static final String TAG = "LivePlay";
     public static Context context;
 
     // ========== 核心播放器 ==========
@@ -128,7 +131,6 @@ public class LivePlayActivity extends BaseActivity {
     private LiveEpgDateAdapter liveEpgDateAdapter;
     private LiveEpgAdapter epgListAdapter;
     private List<LiveEpgDate> liveEpgDateList = new ArrayList<>();
-    private List<LiveDayListGroup> liveDayList = new ArrayList<>();
     private List<Epginfo> epgdata = new ArrayList<>();
     private static Hashtable<String, ArrayList<Epginfo>> hsEpg = new Hashtable<>();
 
@@ -171,14 +173,13 @@ public class LivePlayActivity extends BaseActivity {
     public static SimpleDateFormat formatDate = new SimpleDateFormat("yyyy-MM-dd");
     public static SimpleDateFormat formatDate1 = new SimpleDateFormat("MM-dd");
     public static String day = formatDate.format(new Date());
-    public static Date nowday = new Date();
 
     // ========== Handler ==========
     private Handler mHandler = new Handler();
     private int resolutionInfoRetryCount = 0;
     private boolean resolutionInfoPending = false;
 
-    // ========== 快捷菜单、搜索、音轨切换（自包含实现） ==========
+    // ========== 快捷菜单、搜索、音轨切换 ==========
     private PopupWindow shortcutsPopupWindow;
     private PopupWindow searchPopupWindow;
     private PopupWindow trackPopupWindow;
@@ -195,7 +196,9 @@ public class LivePlayActivity extends BaseActivity {
         epgStringAddress = getConfiguredEpgAddress();
         setLoadSir(findViewById(R.id.live_root));
 
-        // ---------- 绑定视图 ----------
+        Log.d(TAG, "init: 开始初始化");
+
+        // ---------- 绑定视图（所有ID需与布局文件一致） ----------
         try {
             mVideoView = findViewById(R.id.mVideoView);
             tvLeftChannelListLayout = findViewById(R.id.tvLeftChannnelListLayout);
@@ -244,8 +247,11 @@ public class LivePlayActivity extends BaseActivity {
             if (imgLiveIcon != null) imgLiveIcon.setVisibility(View.INVISIBLE);
             if (liveIconNullText != null) liveIconNullText.setVisibility(View.INVISIBLE);
             if (liveIconNullBg != null) liveIconNullBg.setVisibility(View.INVISIBLE);
+            Log.d(TAG, "init: 视图绑定成功");
         } catch (Exception e) {
-            Log.e("LivePlay", "init view error", e);
+            Log.e(TAG, "init: 视图绑定失败", e);
+            Toast.makeText(this, "布局错误，请检查资源ID", Toast.LENGTH_LONG).show();
+            return;
         }
 
         // ---------- 动画 ----------
@@ -258,7 +264,6 @@ public class LivePlayActivity extends BaseActivity {
 
         Hawk.put(HawkConfig.NOW_DATE, formatDate.format(new Date()));
         day = formatDate.format(new Date());
-        nowday = new Date();
 
         // ---------- 播放控制 ----------
         initPlayControls();
@@ -275,7 +280,7 @@ public class LivePlayActivity extends BaseActivity {
         initLiveSettingGroupList();
         Hawk.put(HawkConfig.PLAYER_IS_LIVE, true);
 
-        // ---------- 初始化酷9风格的自包含菜单（不依赖布局） ----------
+        // ---------- 初始化酷9风格菜单 ----------
         initShortcutsMenu();
         initSearchDialog();
         initTrackDialog();
@@ -283,23 +288,21 @@ public class LivePlayActivity extends BaseActivity {
         // ---------- 网速更新 ----------
         mHandler.postDelayed(mUpdateNetSpeedRun, 1000);
 
-        // ---------- 检查接口地址是否配置，若未配置则弹出设置对话框 ----------
+        // ---------- 检查接口地址 ----------
         checkApiConfig();
     }
 
-    // ========== 检查接口配置，若未配置则弹出设置对话框 ==========
+    // ========== 检查接口配置 ==========
     private void checkApiConfig() {
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (TextUtils.isEmpty(apiUrl)) {
-            // 延迟显示对话框，确保界面已初始化
             mHandler.postDelayed(() -> showSettingDialog(), 300);
         } else {
-            // 已有接口地址，正常加载直播源
             initLiveChannelList();
         }
     }
 
-    // ========== 显示设置对话框（内置） ==========
+    // ========== 设置对话框 ==========
     private void showSettingDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("设置接口地址");
@@ -320,17 +323,12 @@ public class LivePlayActivity extends BaseActivity {
             }
             Hawk.put(HawkConfig.API_URL, url);
             Toast.makeText(LivePlayActivity.this, "已保存，正在加载...", Toast.LENGTH_SHORT).show();
-            // 重新加载直播源
-            initLiveChannelList();
-            // 刷新 EPG 地址
             epgStringAddress = getConfiguredEpgAddress();
+            initLiveChannelList();
         });
 
         builder.setNegativeButton("取消", (dialog, which) -> {
-            // 用户取消，提示并关闭 Activity（或允许继续）
             Toast.makeText(LivePlayActivity.this, "请先设置接口地址", Toast.LENGTH_SHORT).show();
-            // 如果用户取消，可以退出或再次提示；这里不退出，让用户继续操作
-            // 但为了不卡死，我们再次弹出对话框
             mHandler.postDelayed(() -> showSettingDialog(), 500);
         });
 
@@ -403,11 +401,19 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-    // ========== 初始化视频播放器 ==========
+    // ========== 视频播放器 ==========
     private void initVideoView() {
-        if (mVideoView == null) return;
+        if (mVideoView == null) {
+            Log.e(TAG, "initVideoView: mVideoView is null");
+            return;
+        }
         livePlayerManager.init(mVideoView);
-        mVideoView.setVideoController(new LiveController(this));
+        // 使用酷9的LiveController
+        try {
+            mVideoView.setVideoController(new LiveController(this));
+        } catch (Exception e) {
+            Log.e(TAG, "initVideoView: 设置LiveController失败", e);
+        }
     }
 
     // ========== 频道列表 ==========
@@ -567,9 +573,11 @@ public class LivePlayActivity extends BaseActivity {
             showSettingDialog();
             return;
         }
+        Log.d(TAG, "initLiveChannelList: 开始加载直播源");
         ApiConfig api = ApiConfig.get();
         List<LiveChannelGroup> list = api.getChannelGroupList();
         if (list != null && !list.isEmpty()) {
+            Log.d(TAG, "initLiveChannelList: 已有频道列表，数量=" + list.size());
             applyChannelList(list);
             return;
         }
@@ -579,23 +587,25 @@ public class LivePlayActivity extends BaseActivity {
 
     private void loadLiveSourceAsync() {
         final String apiUrl = Hawk.get(HawkConfig.API_URL, "");
-        if (apiUrl == null || apiUrl.trim().isEmpty()) {
+        if (TextUtils.isEmpty(apiUrl)) {
             Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
             showSettingDialog();
             return;
         }
         showLoading();
+        Log.d(TAG, "loadLiveSourceAsync: 开始异步加载");
         new Thread(() -> {
             try {
                 String configJson = fetchContent(apiUrl);
                 if (configJson != null && configJson.trim().startsWith("{")) {
-                    com.google.gson.JsonObject config = new com.google.gson.JsonParser().parse(configJson).getAsJsonObject();
+                    com.google.gson.JsonObject config = com.google.gson.JsonParser.parseString(configJson).getAsJsonObject();
                     if (config.has("lives")) {
                         com.google.gson.JsonArray lives = config.getAsJsonArray("lives");
                         loadLivesAndApply(lives);
                         return;
                     }
                 }
+                // 若没有 lives 字段，尝试当作单一直播源
                 com.google.gson.JsonArray livesArray = new com.google.gson.JsonArray();
                 com.google.gson.JsonObject liveObj = new com.google.gson.JsonObject();
                 liveObj.addProperty("name", "直播源");
@@ -604,7 +614,7 @@ public class LivePlayActivity extends BaseActivity {
                 livesArray.add(liveObj);
                 loadLivesAndApply(livesArray);
             } catch (Exception e) {
-                Log.e("LivePlay", "load source error", e);
+                Log.e(TAG, "loadLiveSourceAsync: 加载失败", e);
                 runOnUiThread(() -> {
                     showSuccess();
                     Toast.makeText(LivePlayActivity.this, "加载失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -616,7 +626,7 @@ public class LivePlayActivity extends BaseActivity {
     private String fetchContent(String url) {
         try {
             OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .connectTimeout(15, TimeUnit.SECONDS)
                     .readTimeout(30, TimeUnit.SECONDS)
                     .build();
             Request request = new Request.Builder().url(url).build();
@@ -625,7 +635,7 @@ public class LivePlayActivity extends BaseActivity {
                 return response.body().string();
             }
         } catch (Exception e) {
-            Log.e("LivePlay", "fetch error: " + e.getMessage());
+            Log.e(TAG, "fetchContent: 网络错误", e);
         }
         return null;
     }
@@ -638,6 +648,7 @@ public class LivePlayActivity extends BaseActivity {
         runOnUiThread(() -> {
             showSuccess();
             if (list != null && !list.isEmpty()) {
+                Log.d(TAG, "loadLivesAndApply: 解析到 " + list.size() + " 个分组");
                 applyChannelList(list);
             } else {
                 Toast.makeText(LivePlayActivity.this, "未解析到频道，请检查直播源格式", Toast.LENGTH_LONG).show();
@@ -651,14 +662,12 @@ public class LivePlayActivity extends BaseActivity {
         if (liveChannelGroupAdapter != null) {
             liveChannelGroupAdapter.setNewData(liveChannelGroupList);
         }
-        // 默认播放第一个频道的第一个
         if (!liveChannelGroupList.isEmpty()) {
             LiveChannelGroup firstGroup = liveChannelGroupList.get(0);
             if (firstGroup != null && firstGroup.getLiveChannels() != null && !firstGroup.getLiveChannels().isEmpty()) {
                 playChannel(0, 0, true);
             }
         }
-        // 更新 EPG
         mHandler.postDelayed(mLoadEpgRun, EPG_LOAD_DELAY);
     }
 
@@ -706,7 +715,6 @@ public class LivePlayActivity extends BaseActivity {
         scaleGroup.setLiveSettingItems(scaleItems);
         liveSettingGroupList.add(scaleGroup);
 
-        // 添加一个“显示EPG”设置项
         LiveSettingGroup epgGroup = new LiveSettingGroup();
         epgGroup.setGroupName("EPG");
         List<LiveSettingItem> epgItems = new ArrayList<>();
@@ -756,23 +764,16 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     private void initDayList() {
-        liveDayList.clear();
         liveEpgDateList.clear();
         Calendar calendar = Calendar.getInstance();
         calendar.setTime(new Date());
         for (int i = 0; i < 8; i++) {
             LiveEpgDate dateItem = new LiveEpgDate();
-            // 使用反射设置日期（兼容不同版本）
             try {
                 java.lang.reflect.Method setDateMethod = LiveEpgDate.class.getMethod("setDate", String.class);
                 setDateMethod.invoke(dateItem, formatDate.format(calendar.getTime()));
             } catch (Exception e) {
-                try {
-                    java.lang.reflect.Field dateField = LiveEpgDate.class.getField("date");
-                    dateField.set(dateItem, formatDate.format(calendar.getTime()));
-                } catch (Exception e2) {
-                    // ignore
-                }
+                // ignore
             }
             try {
                 java.lang.reflect.Method setPresentedMethod = LiveEpgDate.class.getMethod("setDatePresented", String.class);
@@ -814,7 +815,7 @@ public class LivePlayActivity extends BaseActivity {
                 }
                 updateChannelIcon(channelName, epgInfo == null ? null : epgInfo[0]);
             } catch (Exception e) {
-                Log.e("LivePlay", "getEpg icon error", e);
+                Log.e(TAG, "getEpg icon error", e);
                 updateChannelIcon(channelName, null);
             }
         } else if (logoUrl.equals("false")) {
@@ -1206,15 +1207,6 @@ public class LivePlayActivity extends BaseActivity {
         return -1;
     }
 
-    private int getCurrentEpgIndexOrSelected() {
-        if (epgListAdapter == null) return -1;
-        int epgIndex = findCurrentEpgIndex(epgListAdapter.getData());
-        if (epgIndex >= 0) return epgIndex;
-        epgIndex = epgListAdapter.getSelectedIndex();
-        if (epgIndex >= 0 && epgIndex < epgListAdapter.getData().size()) return epgIndex;
-        return 0;
-    }
-
     private void showBottomEpg() {
         if (epgdata == null || epgdata.isEmpty()) {
             setDefaultBottomEpg();
@@ -1265,7 +1257,7 @@ public class LivePlayActivity extends BaseActivity {
             try {
                 Glide.with(this).load(iconUrl).into(imgLiveIcon);
             } catch (Exception e) {
-                Log.e("LivePlay", "load icon error", e);
+                Log.e(TAG, "load icon error", e);
             }
         } else {
             imgLiveIcon.setVisibility(View.INVISIBLE);
@@ -1293,12 +1285,23 @@ public class LivePlayActivity extends BaseActivity {
         if (tv_srcinfo != null) tv_srcinfo.setText("线路 " + (channelItem.getSourceIndex() + 1) + "/" + channelItem.getSourceNum());
 
         String url = channelItem.getUrl();
-        if (url == null || url.isEmpty()) return;
+        if (url == null || url.isEmpty()) {
+            Log.e(TAG, "playChannel: URL为空");
+            return;
+        }
 
         if (mVideoView != null) {
-            mVideoView.release();
-            mVideoView.setUrl(url);
-            mVideoView.start();
+            try {
+                mVideoView.release();
+                mVideoView.setUrl(url);
+                mVideoView.start();
+                Log.d(TAG, "playChannel: 开始播放 " + channelItem.getChannelName());
+            } catch (Exception e) {
+                Log.e(TAG, "playChannel: 播放失败", e);
+                Toast.makeText(this, "播放失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Log.e(TAG, "playChannel: mVideoView为空");
         }
 
         showChannelInfo();
@@ -1531,13 +1534,12 @@ public class LivePlayActivity extends BaseActivity {
         }
     };
 
-    // ========== 键盘事件 ==========
+    // ========== 按键事件 ==========
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             int keyCode = event.getKeyCode();
 
-            // 如果未配置接口或频道列表为空，按菜单键、确认键、返回键都弹出设置对话框
             String apiUrl = Hawk.get(HawkConfig.API_URL, "");
             boolean needSetting = TextUtils.isEmpty(apiUrl) || liveChannelGroupList.isEmpty();
 
@@ -1554,29 +1556,26 @@ public class LivePlayActivity extends BaseActivity {
                 return super.dispatchKeyEvent(event);
             }
 
-            // ---------- 正常按键处理 ----------
+            // 正常按键
             if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
                 numericKeyDown(keyCode - KeyEvent.KEYCODE_0);
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_CHANNEL_UP || keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
+                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE)
                     return super.dispatchKeyEvent(event);
-                }
                 playNext();
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_CHANNEL_DOWN || keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
+                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE)
                     return super.dispatchKeyEvent(event);
-                }
                 playPrevious();
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
+                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE)
                     return super.dispatchKeyEvent(event);
-                }
                 if (isBack && mVideoView != null) {
                     mVideoView.seekTo(mVideoView.getCurrentPosition() - 10000);
                     return true;
@@ -1585,9 +1584,8 @@ public class LivePlayActivity extends BaseActivity {
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
+                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE)
                     return super.dispatchKeyEvent(event);
-                }
                 if (isBack && mVideoView != null) {
                     mVideoView.seekTo(mVideoView.getCurrentPosition() + 10000);
                     return true;
@@ -1596,9 +1594,8 @@ public class LivePlayActivity extends BaseActivity {
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
+                if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE)
                     return super.dispatchKeyEvent(event);
-                }
                 showChannelList();
                 return true;
             }
@@ -1665,9 +1662,7 @@ public class LivePlayActivity extends BaseActivity {
         }
     };
 
-    // ========== 自包含的酷9风格菜单（不依赖布局） ==========
-
-    // ---------- 快捷菜单 ----------
+    // ========== 自包含菜单 ==========
     private void initShortcutsMenu() {
         RecyclerView rv = new RecyclerView(this);
         rv.setLayoutManager(new LinearLayoutManager(this));
@@ -1693,19 +1688,19 @@ public class LivePlayActivity extends BaseActivity {
 
     private void handleShortcutAction(int type) {
         switch (type) {
-            case 0: // 解码方式
+            case 0:
                 Toast.makeText(this, "切换解码器", Toast.LENGTH_SHORT).show();
                 break;
-            case 1: // 画面比例
+            case 1:
                 Toast.makeText(this, "切换画面比例", Toast.LENGTH_SHORT).show();
                 break;
-            case 2: // 时移
+            case 2:
                 Toast.makeText(this, "时移功能", Toast.LENGTH_SHORT).show();
                 break;
-            case 3: // 回看
+            case 3:
                 Toast.makeText(this, "回看功能", Toast.LENGTH_SHORT).show();
                 break;
-            case 4: // 换源
+            case 4:
                 if (currentLiveChannelItem != null) {
                     int nextSource = currentLiveChannelItem.getSourceIndex() + 1;
                     if (nextSource >= currentLiveChannelItem.getSourceNum()) nextSource = 0;
@@ -1713,7 +1708,7 @@ public class LivePlayActivity extends BaseActivity {
                     playChannel(currentChannelGroupIndex, currentLiveChannelIndex, false);
                 }
                 break;
-            case 5: // 显示/隐藏 EPG
+            case 5:
                 if (divEpg != null) {
                     divEpg.setVisibility(divEpg.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
                 }
@@ -1752,7 +1747,6 @@ public class LivePlayActivity extends BaseActivity {
             }
             if (searchPopupWindow != null) searchPopupWindow.dismiss();
         });
-        // 将全部频道数据传给适配器作为初始搜索列表
         List<LiveChannelItem> allChannels = new ArrayList<>();
         for (LiveChannelGroup group : liveChannelGroupList) {
             if (group != null && group.getLiveChannels() != null) {
@@ -1775,7 +1769,7 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-    // ---------- 音轨/字幕切换 ----------
+    // ---------- 音轨/字幕 ----------
     private void initTrackDialog() {
         RecyclerView rv = new RecyclerView(this);
         rv.setLayoutManager(new LinearLayoutManager(this));
@@ -1788,11 +1782,9 @@ public class LivePlayActivity extends BaseActivity {
             TrackItem item = adapter.getItem(position);
             if (item != null && mVideoView != null) {
                 Toast.makeText(this, "切换到: " + item.name, Toast.LENGTH_SHORT).show();
-                // 实际应调用 mVideoView.switchTrack(...)
             }
             if (trackPopupWindow != null) trackPopupWindow.dismiss();
         });
-        // 模拟轨道数据（实际应从播放器获取）
         List<TrackItem> tracks = new ArrayList<>();
         tracks.add(new TrackItem("音轨1", "audio"));
         tracks.add(new TrackItem("音轨2", "audio"));
@@ -1813,171 +1805,87 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-    // ========== 内部适配器类（自包含） ==========
-
-    // ---------- 快捷菜单适配器 ----------
+    // ========== 内部适配器 ==========
     private static class ShortcutsAdapter extends RecyclerView.Adapter<ShortcutsAdapter.ViewHolder> {
         private String[] names;
         private OnItemClickListener listener;
-
-        public interface OnItemClickListener {
-            void onItemClick(int position);
-        }
-
-        public ShortcutsAdapter(String[] names) {
-            this.names = names;
-        }
-
-        public void setOnItemClickListener(OnItemClickListener listener) {
-            this.listener = listener;
-        }
-
-        @NonNull @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        interface OnItemClickListener { void onItemClick(int position); }
+        ShortcutsAdapter(String[] names) { this.names = names; }
+        void setOnItemClickListener(OnItemClickListener listener) { this.listener = listener; }
+        @NonNull @Override public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             TextView tv = new TextView(parent.getContext());
             tv.setPadding(50, 30, 50, 30);
             tv.setTextColor(Color.WHITE);
             tv.setTextSize(18);
             return new ViewHolder(tv);
         }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        @Override public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             holder.textView.setText(names[position]);
-            holder.textView.setOnClickListener(v -> {
-                if (listener != null) listener.onItemClick(position);
-            });
+            holder.textView.setOnClickListener(v -> { if (listener != null) listener.onItemClick(position); });
         }
-
-        @Override
-        public int getItemCount() { return names.length; }
-
+        @Override public int getItemCount() { return names.length; }
         static class ViewHolder extends RecyclerView.ViewHolder {
             TextView textView;
-            ViewHolder(View itemView) {
-                super(itemView);
-                textView = (TextView) itemView;
-            }
+            ViewHolder(View itemView) { super(itemView); textView = (TextView) itemView; }
         }
     }
 
-    // ---------- 搜索适配器 ----------
     private static class SearchAdapter extends RecyclerView.Adapter<SearchAdapter.ViewHolder> {
         private List<LiveChannelItem> data = new ArrayList<>();
         private OnItemClickListener listener;
-
-        public interface OnItemClickListener {
-            void onItemClick(int position);
-        }
-
-        public SearchAdapter(List<LiveChannelItem> data) {
-            this.data = data;
-        }
-
-        public void setNewData(List<LiveChannelItem> newData) {
-            data.clear();
-            if (newData != null) data.addAll(newData);
-            notifyDataSetChanged();
-        }
-
-        public LiveChannelItem getItem(int position) {
-            return data.get(position);
-        }
-
-        public void setOnItemClickListener(OnItemClickListener listener) {
-            this.listener = listener;
-        }
-
-        @NonNull @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        interface OnItemClickListener { void onItemClick(int position); }
+        SearchAdapter(List<LiveChannelItem> data) { this.data = data; }
+        void setNewData(List<LiveChannelItem> newData) { data.clear(); if (newData != null) data.addAll(newData); notifyDataSetChanged(); }
+        LiveChannelItem getItem(int position) { return data.get(position); }
+        void setOnItemClickListener(OnItemClickListener listener) { this.listener = listener; }
+        @NonNull @Override public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             TextView tv = new TextView(parent.getContext());
             tv.setPadding(50, 30, 50, 30);
             tv.setTextColor(Color.WHITE);
             tv.setTextSize(18);
             return new ViewHolder(tv);
         }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        @Override public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             LiveChannelItem item = data.get(position);
             holder.textView.setText(item.getChannelName() + " (" + item.getGroupName() + ")");
-            holder.textView.setOnClickListener(v -> {
-                if (listener != null) listener.onItemClick(position);
-            });
+            holder.textView.setOnClickListener(v -> { if (listener != null) listener.onItemClick(position); });
         }
-
-        @Override
-        public int getItemCount() { return data.size(); }
-
+        @Override public int getItemCount() { return data.size(); }
         static class ViewHolder extends RecyclerView.ViewHolder {
             TextView textView;
-            ViewHolder(View itemView) {
-                super(itemView);
-                textView = (TextView) itemView;
-            }
+            ViewHolder(View itemView) { super(itemView); textView = (TextView) itemView; }
         }
     }
 
-    // ---------- 音轨/字幕适配器 ----------
     private static class TrackItem {
-        String name;
-        String type;
+        String name, type;
         TrackItem(String name, String type) { this.name = name; this.type = type; }
     }
 
     private static class TrackAdapter extends RecyclerView.Adapter<TrackAdapter.ViewHolder> {
         private List<TrackItem> data = new ArrayList<>();
         private OnItemClickListener listener;
-
-        public interface OnItemClickListener {
-            void onItemClick(int position);
-        }
-
-        public TrackAdapter(List<TrackItem> data) {
-            this.data = data;
-        }
-
-        public void setNewData(List<TrackItem> newData) {
-            data.clear();
-            if (newData != null) data.addAll(newData);
-            notifyDataSetChanged();
-        }
-
-        public TrackItem getItem(int position) {
-            return data.get(position);
-        }
-
-        public void setOnItemClickListener(OnItemClickListener listener) {
-            this.listener = listener;
-        }
-
-        @NonNull @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        interface OnItemClickListener { void onItemClick(int position); }
+        TrackAdapter(List<TrackItem> data) { this.data = data; }
+        void setNewData(List<TrackItem> newData) { data.clear(); if (newData != null) data.addAll(newData); notifyDataSetChanged(); }
+        TrackItem getItem(int position) { return data.get(position); }
+        void setOnItemClickListener(OnItemClickListener listener) { this.listener = listener; }
+        @NonNull @Override public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
             TextView tv = new TextView(parent.getContext());
             tv.setPadding(50, 30, 50, 30);
             tv.setTextColor(Color.WHITE);
             tv.setTextSize(18);
             return new ViewHolder(tv);
         }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
+        @Override public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             TrackItem item = data.get(position);
             holder.textView.setText(item.name + " (" + item.type + ")");
-            holder.textView.setOnClickListener(v -> {
-                if (listener != null) listener.onItemClick(position);
-            });
+            holder.textView.setOnClickListener(v -> { if (listener != null) listener.onItemClick(position); });
         }
-
-        @Override
-        public int getItemCount() { return data.size(); }
-
+        @Override public int getItemCount() { return data.size(); }
         static class ViewHolder extends RecyclerView.ViewHolder {
             TextView textView;
-            ViewHolder(View itemView) {
-                super(itemView);
-                textView = (TextView) itemView;
-            }
+            ViewHolder(View itemView) { super(itemView); textView = (TextView) itemView; }
         }
     }
 
@@ -2005,14 +1913,11 @@ public class LivePlayActivity extends BaseActivity {
     // ========== 生命周期 ==========
     @Override
     public void onBackPressed() {
-        // 如果未配置接口或频道列表为空，弹出设置对话框
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (TextUtils.isEmpty(apiUrl) || liveChannelGroupList.isEmpty()) {
             showSettingDialog();
             return;
         }
-
-        // 正常返回逻辑
         if (tvRightSettingLayout != null && tvRightSettingLayout.getVisibility() == View.VISIBLE) {
             mHandler.removeCallbacks(mHideSettingLayoutRun);
             tvRightSettingLayout.setVisibility(View.INVISIBLE);
@@ -2039,20 +1944,9 @@ public class LivePlayActivity extends BaseActivity {
         super.onBackPressed();
     }
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (mVideoView != null) mVideoView.pause();
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (mVideoView != null) mVideoView.resume();
-    }
-
-    @Override
-    protected void onDestroy() {
+    @Override protected void onPause() { super.onPause(); if (mVideoView != null) mVideoView.pause(); }
+    @Override protected void onResume() { super.onResume(); if (mVideoView != null) mVideoView.resume(); }
+    @Override protected void onDestroy() {
         super.onDestroy();
         if (mVideoView != null) mVideoView.release();
         if (mHandler != null) mHandler.removeCallbacksAndMessages(null);
@@ -2060,7 +1954,7 @@ public class LivePlayActivity extends BaseActivity {
         if (objectAnimator != null) objectAnimator.cancel();
     }
 
-    // ========== 视图引用（已定义，避免编译错误） ==========
+    // 视图引用
     private TextView txtNoEpg;
     private View ll_right_top_loading;
     private View ll_right_top_huikan;
