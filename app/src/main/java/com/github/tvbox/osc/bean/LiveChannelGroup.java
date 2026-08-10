@@ -7,7 +7,7 @@ public class LiveChannelGroup {
     private int groupIndex;
     private String groupName;
     private String groupPassword;
-    private List<LiveChannelItem> liveChannelItems;
+    private ArrayList<LiveChannelItem> liveChannelItems;
 
     public int getGroupIndex() {
         return groupIndex;
@@ -25,13 +25,23 @@ public class LiveChannelGroup {
         this.groupName = groupName;
     }
 
-    public List<LiveChannelItem> getLiveChannels() {
+    public ArrayList<LiveChannelItem> getLiveChannels() {
         return liveChannelItems;
     }
 
-    public void setLiveChannels(List<LiveChannelItem> liveChannelItems) {
+    public void setLiveChannels(ArrayList<LiveChannelItem> liveChannelItems) {
         this.liveChannelItems = liveChannelItems;
     }
+
+    // ========== 酷9兼容方法 ==========
+    public void setLiveChannels(List<LiveChannelItem> items) {
+        if (items instanceof ArrayList) {
+            this.liveChannelItems = (ArrayList<LiveChannelItem>) items;
+        } else {
+            this.liveChannelItems = new ArrayList<>(items);
+        }
+    }
+    // ========== 兼容方法结束 ==========
 
     public String getGroupPassword() {
         return groupPassword;
