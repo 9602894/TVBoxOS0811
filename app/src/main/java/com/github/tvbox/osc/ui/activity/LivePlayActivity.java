@@ -3,6 +3,7 @@ package com.github.tvbox.osc.ui.activity;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.CountDownTimer;
@@ -11,7 +12,6 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -91,6 +91,7 @@ import xyz.doikki.videoplayer.player.VideoView;
 
 /**
  * LivePlayActivity - 整合酷9全部功能，自包含所有适配器，不依赖额外布局文件
+ * 增加未配置接口时引导进入设置的功能
  */
 public class LivePlayActivity extends BaseActivity {
     public static Context context;
@@ -285,6 +286,29 @@ public class LivePlayActivity extends BaseActivity {
 
         // ---------- 网速更新 ----------
         mHandler.postDelayed(mUpdateNetSpeedRun, 1000);
+
+        // ---------- 检查接口地址是否配置 ----------
+        checkApiConfig();
+    }
+
+    // ========== 检查接口配置，若未配置则引导进入设置 ==========
+    private void checkApiConfig() {
+        String apiUrl = Hawk.get(HawkConfig.API_URL, "");
+        if (TextUtils.isEmpty(apiUrl)) {
+            // 显示提示并引导
+            Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
+            // 显示一个可点击的提示视图（这里简单 Toast，也可添加一个自定义视图）
+            // 按返回键将跳转到设置，按菜单键也会跳转
+        }
+    }
+
+    // ========== 跳转到设置（主界面） ==========
+    private void gotoSetting() {
+        // 跳转到 MainActivity，因为 MainActivity 通常有设置入口
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        finish();
     }
 
     // ========== 播放控制初始化 ==========
@@ -1472,11 +1496,37 @@ public class LivePlayActivity extends BaseActivity {
         }
     };
 
-    // ========== 键盘事件 ==========
+    // ========== 键盘事件（增加进入设置功能） ==========
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             int keyCode = event.getKeyCode();
+
+            // 如果未配置接口或频道列表为空，按菜单键或确认键引导进入设置
+            String apiUrl = Hawk.get(HawkConfig.API_URL, "");
+            boolean needSetting = TextUtils.isEmpty(apiUrl) || liveChannelGroupList.isEmpty();
+
+            if (needSetting) {
+                // 菜单键或确认键进入设置
+                if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
+                    gotoSetting();
+                    return true;
+                }
+                // 返回键也进入设置
+                if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    gotoSetting();
+                    return true;
+                }
+                // 其他按键忽略或显示提示
+                if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
+                    Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                // 让其他按键继续传递，但 UI 无反应
+                return super.dispatchKeyEvent(event);
+            }
+
+            // ---------- 正常按键处理 ----------
             if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
                 numericKeyDown(keyCode - KeyEvent.KEYCODE_0);
                 return true;
@@ -1591,7 +1641,6 @@ public class LivePlayActivity extends BaseActivity {
 
     // ---------- 快捷菜单 ----------
     private void initShortcutsMenu() {
-        // 创建 RecyclerView 作为菜单列表
         RecyclerView rv = new RecyclerView(this);
         rv.setLayoutManager(new LinearLayoutManager(this));
         rv.setBackgroundColor(Color.BLACK);
@@ -1928,6 +1977,14 @@ public class LivePlayActivity extends BaseActivity {
     // ========== 生命周期 ==========
     @Override
     public void onBackPressed() {
+        // 如果未配置接口或频道列表为空，跳转到设置
+        String apiUrl = Hawk.get(HawkConfig.API_URL, "");
+        if (TextUtils.isEmpty(apiUrl) || liveChannelGroupList.isEmpty()) {
+            gotoSetting();
+            return;
+        }
+
+        // 正常返回逻辑
         if (tvRightSettingLayout != null && tvRightSettingLayout.getVisibility() == View.VISIBLE) {
             mHandler.removeCallbacks(mHideSettingLayoutRun);
             tvRightSettingLayout.setVisibility(View.INVISIBLE);
