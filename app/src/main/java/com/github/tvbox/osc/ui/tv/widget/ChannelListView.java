@@ -1,17 +1,13 @@
 package com.github.tvbox.osc.ui.tv.widget;
 
-
-
 import android.content.Context;
 import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.widget.ListView;
 
-import com.github.tvbox.osc.ui.activity.LivePlayActivity;
-
 public class ChannelListView extends ListView {
     DataChangedListener dataChangedListener;
-    public int pos= LivePlayActivity.currentChannelGroupIndex;
+    public int pos = 0;
     private int y;
 
     public ChannelListView(Context context) {
@@ -37,7 +33,6 @@ public class ChannelListView extends ListView {
         }
     }
 
-
     @Override
     protected void handleDataChanged() {
         super.handleDataChanged();
@@ -49,5 +44,4 @@ public class ChannelListView extends ListView {
     public interface DataChangedListener{
         public void onSuccess();
     }
-
 }
