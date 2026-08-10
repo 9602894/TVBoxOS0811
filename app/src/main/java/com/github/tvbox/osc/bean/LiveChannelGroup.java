@@ -51,3 +51,4 @@ public class LiveChannelGroup {
         this.groupPassword = groupPassword;
     }
 }
+
