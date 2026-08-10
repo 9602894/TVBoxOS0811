@@ -1548,147 +1548,113 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     // ========== 修正 initLiveChannelList 使用反射 ==========
-        private void initLiveChannelList() {
-        List<LiveChannelGroup> list = ApiConfig.get().getChannelGroupList();
-        if (list == null || list.isEmpty()) {
-            loadLiveConfigSimple();
-            return;
-        }
-        applyChannelList(list);
-    }
-
-    private void loadLiveConfigSimple() {
-        if (loadingLiveConfigOnEnter) return;
-
-        final String apiUrl = Hawk.get(HawkConfig.API_URL, "");
-        if (apiUrl == null || apiUrl.trim().isEmpty()) {
-            Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
+    private void initLiveChannelList() {
+        ApiConfig api = ApiConfig.get();
+        List<LiveChannelGroup> list = api.getChannelGroupList();
+        if (list != null && !list.isEmpty()) {
+            applyChannelList(list);
             return;
         }
 
-        loadingLiveConfigOnEnter = true;
-        showLoading();
-
-        final ApiConfig api = ApiConfig.get();
-
-        // 方案1: 尝试加载完整配置（TVBox标准方式）
-        api.loadConfig(false, new ApiConfig.LoadConfigCallback() {
-            @Override
-            public void success() {
-                runOnUiThread(() -> {
-                    loadingLiveConfigOnEnter = false;
-                    showSuccess();
-                    List<LiveChannelGroup> loaded = api.getChannelGroupList();
-                    if (loaded != null && !loaded.isEmpty()) {
-                        Log.d("LivePlay", "Config loaded, channels: " + loaded.size());
-                        applyChannelList(loaded);
-                    } else {
-                        // 配置加载成功但无直播源，尝试方案2
-                        Log.w("LivePlay", "Config loaded but no channels, trying direct load");
-                        loadLiveDirect(apiUrl);
-                    }
-                });
-            }
-            @Override
-            public void error(String msg) {
-                runOnUiThread(() -> {
-                    Log.e("LivePlay", "loadConfig error: " + msg);
-                    // 方案1失败，尝试方案2: 直接解析直播源
-                    loadLiveDirect(apiUrl);
-                });
-            }
-            @Override
-            public void notice(String msg) {}
-        }, LivePlayActivity.this);
-    }
-
-    /**
-     * 备选方案: 直接解析直播源地址（txt/m3u格式）
-     * 当 TVBox 配置加载失败时，尝试直接把接口地址当作直播源加载
-     */
-    private void loadLiveDirect(final String sourceUrl) {
-        final ApiConfig api = ApiConfig.get();
-
-        // 先尝试从 getLive() 恢复
+        // 尝试从已解析的 lives 配置恢复
         try {
             java.lang.reflect.Method getLive = api.getClass().getMethod("getLive");
             Object lives = getLive.invoke(api);
-            if (lives != null && lives instanceof com.google.gson.JsonArray) {
-                com.google.gson.JsonArray arr = (com.google.gson.JsonArray) lives;
-                if (arr.size() > 0) {
-                    java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
-                    loadLives.invoke(api, arr);
-                    List<LiveChannelGroup> list = api.getChannelGroupList();
-                    if (list != null && !list.isEmpty()) {
-                        loadingLiveConfigOnEnter = false;
-                        showSuccess();
-                        applyChannelList(list);
-                        return;
-                    }
+            if (lives != null && lives instanceof com.google.gson.JsonArray 
+                    && ((com.google.gson.JsonArray)lives).size() > 0) {
+                java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
+                loadLives.invoke(api, lives);
+                list = api.getChannelGroupList();
+                if (list != null && !list.isEmpty()) {
+                    applyChannelList(list);
+                    return;
                 }
             }
         } catch (Exception e) {
             Log.e("LivePlay", "getLive restore failed: " + e.getMessage());
         }
 
-        // 构造 lives JsonArray 直接加载
+        // 异步加载直播源
+        loadLiveSourceAsync();
+    }
+
+    private void loadLiveSourceAsync() {
+        final String apiUrl = Hawk.get(HawkConfig.API_URL, "");
+        if (apiUrl == null || apiUrl.trim().isEmpty()) {
+            Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        showLoading();
+
+        new Thread(() -> {
+            try {
+                // 方案1: 如果接口地址是JSON配置，尝试完整加载
+                String configJson = fetchContent(apiUrl);
+                if (configJson != null && configJson.trim().startsWith("{")) {
+                    com.google.gson.JsonObject config = new com.google.gson.JsonParser().parse(configJson).getAsJsonObject();
+                    if (config.has("lives")) {
+                        com.google.gson.JsonArray lives = config.getAsJsonArray("lives");
+                        loadLivesAndApply(lives);
+                        return;
+                    }
+                }
+
+                // 方案2: 直接把接口地址当作 txt/m3u 直播源加载
+                com.google.gson.JsonArray livesArray = new com.google.gson.JsonArray();
+                com.google.gson.JsonObject liveObj = new com.google.gson.JsonObject();
+                liveObj.addProperty("name", "直播源");
+                liveObj.addProperty("type", 0);
+                liveObj.addProperty("url", apiUrl);
+                livesArray.add(liveObj);
+                loadLivesAndApply(livesArray);
+
+            } catch (Exception e) {
+                Log.e("LivePlay", "load source error", e);
+                runOnUiThread(() -> {
+                    showSuccess();
+                    Toast.makeText(LivePlayActivity.this, 
+                        "加载失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+
+    private String fetchContent(String url) {
         try {
-            com.google.gson.JsonArray livesArray = new com.google.gson.JsonArray();
-            com.google.gson.JsonObject liveObj = new com.google.gson.JsonObject();
-            liveObj.addProperty("name", "直播源");
-            liveObj.addProperty("type", 0);
-            liveObj.addProperty("url", sourceUrl);
-            livesArray.add(liveObj);
-
-            java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
-            loadLives.invoke(api, livesArray);
-
-            List<LiveChannelGroup> list = api.getChannelGroupList();
-            if (list != null && !list.isEmpty()) {
-                loadingLiveConfigOnEnter = false;
-                showSuccess();
-                applyChannelList(list);
-                return;
+            okhttp3.OkHttpClient client = new okhttp3.OkHttpClient.Builder()
+                .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+            okhttp3.Request request = new okhttp3.Request.Builder().url(url).build();
+            okhttp3.Response response = client.newCall(request).execute();
+            if (response.isSuccessful() && response.body() != null) {
+                return response.body().string();
             }
         } catch (Exception e) {
-            Log.e("LivePlay", "direct load failed: " + e.getMessage());
+            Log.e("LivePlay", "fetch error: " + e.getMessage());
         }
-
-        // 全部失败
-        loadingLiveConfigOnEnter = false;
-        showSuccess();
-        Toast.makeText(this, "无法加载直播源，请检查接口地址或网络", Toast.LENGTH_LONG).show();
+        return null;
     }
 
+    private void loadLivesAndApply(com.google.gson.JsonArray livesArray) throws Exception {
+        final ApiConfig api = ApiConfig.get();
+        java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
+        loadLives.invoke(api, livesArray);
 
-    private void applyChannelList(List<LiveChannelGroup> list) {
-        liveChannelGroupList.clear();
-        liveChannelGroupList.addAll(list);
-        
-        if (liveChannelGroupAdapter != null) {
-            liveChannelGroupAdapter.setNewData(new ArrayList<>(liveChannelGroupList));
-        }
-        
-        int groupIndex = 0;
-        int channelIndex = 0;
-        String lastChannel = Hawk.get(HawkConfig.LIVE_CHANNEL, "");
-        
-        outer:
-        for (int g = 0; g < liveChannelGroupList.size(); g++) {
-            LiveChannelGroup group = liveChannelGroupList.get(g);
-            if (group == null || group.getLiveChannels() == null) continue;
-            for (int c = 0; c < group.getLiveChannels().size(); c++) {
-                LiveChannelItem item = group.getLiveChannels().get(c);
-                if (item != null && item.getChannelName().equals(lastChannel)) {
-                    groupIndex = g;
-                    channelIndex = c;
-                    break outer;
-                }
+        final List<LiveChannelGroup> list = api.getChannelGroupList();
+        runOnUiThread(() -> {
+            showSuccess();
+            if (list != null && !list.isEmpty()) {
+                Log.d("LivePlay", "Channels loaded: " + list.size());
+                applyChannelList(list);
+            } else {
+                Toast.makeText(LivePlayActivity.this, 
+                    "未解析到频道，请检查直播源格式", Toast.LENGTH_LONG).show();
             }
-        }
-        
-        playChannel(groupIndex, channelIndex, false);
+        });
     }
+
     private final Runnable mUpdateNetSpeedRun = new Runnable() {
         @Override
         public void run() {
