@@ -10,12 +10,6 @@ import com.github.tvbox.osc.bean.LiveSettingGroup;
 
 import java.util.ArrayList;
 
-
-/**
- * @author pj567
- * @date :2021/1/12
- * @description:
- */
 public class LiveSettingGroupAdapter extends BaseQuickAdapter<LiveSettingGroup, BaseViewHolder> {
     private int selectedGroupIndex = -1;
     private int focusedGroupIndex = -1;
@@ -48,6 +42,12 @@ public class LiveSettingGroupAdapter extends BaseQuickAdapter<LiveSettingGroup, 
         if (selectedPosition != -1)
             notifyItemChanged(selectedPosition);
     }
+
+    // ========== 酷9兼容方法 ==========
+    public void setSelectedPosition(int position) {
+        setSelectedGroupIndex(position);
+    }
+    // ========== 兼容方法结束 ==========
 
     public int getSelectedGroupIndex() {
         return selectedGroupIndex;
