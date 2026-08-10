@@ -1559,34 +1559,107 @@ public class LivePlayActivity extends BaseActivity {
 
     private void loadLiveConfigSimple() {
         if (loadingLiveConfigOnEnter) return;
+
+        final String apiUrl = Hawk.get(HawkConfig.API_URL, "");
+        if (apiUrl == null || apiUrl.trim().isEmpty()) {
+            Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
+            return;
+        }
+
         loadingLiveConfigOnEnter = true;
         showLoading();
-        ApiConfig.get().loadConfig(false, new ApiConfig.LoadConfigCallback() {
+
+        final ApiConfig api = ApiConfig.get();
+
+        // 方案1: 尝试加载完整配置（TVBox标准方式）
+        api.loadConfig(false, new ApiConfig.LoadConfigCallback() {
             @Override
             public void success() {
                 runOnUiThread(() -> {
                     loadingLiveConfigOnEnter = false;
                     showSuccess();
-                    List<LiveChannelGroup> loaded = ApiConfig.get().getChannelGroupList();
+                    List<LiveChannelGroup> loaded = api.getChannelGroupList();
                     if (loaded != null && !loaded.isEmpty()) {
+                        Log.d("LivePlay", "Config loaded, channels: " + loaded.size());
                         applyChannelList(loaded);
                     } else {
-                        Toast.makeText(LivePlayActivity.this, "配置中无直播源", Toast.LENGTH_SHORT).show();
+                        // 配置加载成功但无直播源，尝试方案2
+                        Log.w("LivePlay", "Config loaded but no channels, trying direct load");
+                        loadLiveDirect(apiUrl);
                     }
                 });
             }
             @Override
             public void error(String msg) {
                 runOnUiThread(() -> {
-                    loadingLiveConfigOnEnter = false;
-                    showSuccess();
-                    Toast.makeText(LivePlayActivity.this, "加载失败: " + msg, Toast.LENGTH_SHORT).show();
+                    Log.e("LivePlay", "loadConfig error: " + msg);
+                    // 方案1失败，尝试方案2: 直接解析直播源
+                    loadLiveDirect(apiUrl);
                 });
             }
             @Override
             public void notice(String msg) {}
         }, LivePlayActivity.this);
     }
+
+    /**
+     * 备选方案: 直接解析直播源地址（txt/m3u格式）
+     * 当 TVBox 配置加载失败时，尝试直接把接口地址当作直播源加载
+     */
+    private void loadLiveDirect(final String sourceUrl) {
+        final ApiConfig api = ApiConfig.get();
+
+        // 先尝试从 getLive() 恢复
+        try {
+            java.lang.reflect.Method getLive = api.getClass().getMethod("getLive");
+            Object lives = getLive.invoke(api);
+            if (lives != null && lives instanceof com.google.gson.JsonArray) {
+                com.google.gson.JsonArray arr = (com.google.gson.JsonArray) lives;
+                if (arr.size() > 0) {
+                    java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
+                    loadLives.invoke(api, arr);
+                    List<LiveChannelGroup> list = api.getChannelGroupList();
+                    if (list != null && !list.isEmpty()) {
+                        loadingLiveConfigOnEnter = false;
+                        showSuccess();
+                        applyChannelList(list);
+                        return;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e("LivePlay", "getLive restore failed: " + e.getMessage());
+        }
+
+        // 构造 lives JsonArray 直接加载
+        try {
+            com.google.gson.JsonArray livesArray = new com.google.gson.JsonArray();
+            com.google.gson.JsonObject liveObj = new com.google.gson.JsonObject();
+            liveObj.addProperty("name", "直播源");
+            liveObj.addProperty("type", 0);
+            liveObj.addProperty("url", sourceUrl);
+            livesArray.add(liveObj);
+
+            java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
+            loadLives.invoke(api, livesArray);
+
+            List<LiveChannelGroup> list = api.getChannelGroupList();
+            if (list != null && !list.isEmpty()) {
+                loadingLiveConfigOnEnter = false;
+                showSuccess();
+                applyChannelList(list);
+                return;
+            }
+        } catch (Exception e) {
+            Log.e("LivePlay", "direct load failed: " + e.getMessage());
+        }
+
+        // 全部失败
+        loadingLiveConfigOnEnter = false;
+        showSuccess();
+        Toast.makeText(this, "无法加载直播源，请检查接口地址或网络", Toast.LENGTH_LONG).show();
+    }
+
 
     private void applyChannelList(List<LiveChannelGroup> list) {
         liveChannelGroupList.clear();
