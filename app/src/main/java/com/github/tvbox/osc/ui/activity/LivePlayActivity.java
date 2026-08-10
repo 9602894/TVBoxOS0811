@@ -8,6 +8,7 @@ import android.content.Context;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -20,6 +21,7 @@ import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
 
+import com.bumptech.glide.Glide;
 import com.github.tvbox.osc.R;
 import com.github.tvbox.osc.api.ApiConfig;
 import com.github.tvbox.osc.base.BaseActivity;
@@ -160,6 +162,7 @@ public class LivePlayActivity extends BaseActivity {
     private LiveEpgAdapter epgListAdapter;
 
     private List<LiveDayListGroup> liveDayList = new ArrayList<>();
+    private List<LiveEpgDate> liveEpgDateList = new ArrayList<>(); // 用于适配器
 
     public static SimpleDateFormat formatDate = new SimpleDateFormat("yyyy-MM-dd");
     public static SimpleDateFormat formatDate1 = new SimpleDateFormat("MM-dd");
@@ -181,6 +184,10 @@ public class LivePlayActivity extends BaseActivity {
     private TextView tvSelectedChannel;
     private String logoUrl = "";
 
+    // 添加缺失的成员变量
+    private TextView tv_currentpos;
+    private TextView tv_duration;
+
     @Override
     protected int getLayoutResID() {
         return R.layout.activity_live_play;
@@ -190,7 +197,7 @@ public class LivePlayActivity extends BaseActivity {
     protected void init() {
         context = this;
         epgStringAddress = getConfiguredEpgAddress();
-        logoUrl = ""; // 避免依赖 HawkConfig.LIVE_LOGO_URL
+        logoUrl = "";
 
         setLoadSir(findViewById(R.id.live_root));
         try {
@@ -244,7 +251,7 @@ public class LivePlayActivity extends BaseActivity {
             if (liveIconNullText != null) liveIconNullText.setVisibility(View.INVISIBLE);
             if (liveIconNullBg != null) liveIconNullBg.setVisibility(View.INVISIBLE);
         } catch (Exception e) {
-            LOG.e("LivePlayActivity init error", e);
+            Log.e("LivePlayActivity", "init error", e);
         }
 
         if (iv_circle_bg != null) {
@@ -442,7 +449,7 @@ public class LivePlayActivity extends BaseActivity {
                 }
                 updateChannelIcon(channelName, epgInfo == null ? null : epgInfo[0]);
             } catch (Exception e) {
-                LOG.e("getEpg icon error", e);
+                Log.e("LivePlay", "getEpg icon error", e);
                 updateChannelIcon(channelName, null);
             }
         } else if (logoUrl.equals("false")) {
@@ -755,14 +762,14 @@ public class LivePlayActivity extends BaseActivity {
         return lower.contains("无节目") || lower.contains("暂无") || lower.contains("no epg") || lower.contains("not available");
     }
 
-    // ========== 修正后的 normalizeEpgChannelName 方法 ==========
+    // ========== 修正后的 normalizeEpgChannelName ==========
     private String normalizeEpgChannelName(String name) {
         if (name == null) return "";
         return name.replaceAll("CCTV-", "CCTV")
-                   .replaceAll("\\+", "")      // 修正：原 "\+" -> "\\+"
+                   .replaceAll("\\+", "")
                    .replaceAll("HD", "")
-                   .replaceAll("\\d+K", "")    // 修正：原 "\d+K" -> "\\d+K"
-                   .replaceAll("\\s+", "")     // 修正：原 "\s+" -> "\\s+"
+                   .replaceAll("\\d+K", "")
+                   .replaceAll("\\s+", "")
                    .trim();
     }
 
@@ -816,12 +823,10 @@ public class LivePlayActivity extends BaseActivity {
             imgLiveIcon.setVisibility(View.VISIBLE);
             liveIconNullBg.setVisibility(View.INVISIBLE);
             liveIconNullText.setVisibility(View.INVISIBLE);
-            // 使用项目现有图片加载方式，若无则忽略
             try {
-                com.github.tvbox.osc.util.ImgUtil.load(this, iconUrl, imgLiveIcon);
+                Glide.with(this).load(iconUrl).into(imgLiveIcon);
             } catch (Exception e) {
-                // 如果 ImgUtil 也不存在，仅设置图片为可见，不加载
-                LOG.e("load icon error", e);
+                Log.e("LivePlay", "load icon error", e);
             }
         } else {
             imgLiveIcon.setVisibility(View.INVISIBLE);
@@ -1359,13 +1364,11 @@ public class LivePlayActivity extends BaseActivity {
         liveSettingGroupAdapter.setSelectedGroupIndex(position);
         if (liveSettingItemAdapter != null) {
             liveSettingItemAdapter.setNewData(group.getLiveSettingItems());
-            // 注：setSelectedItemIndex 方法可能不存在，但逻辑保留
             try {
-                // 如果适配器有该方法则调用，否则忽略
                 java.lang.reflect.Method method = liveSettingItemAdapter.getClass().getMethod("setSelectedItemIndex", int.class);
                 method.invoke(liveSettingItemAdapter, group.getLiveSettingItems().size() > 0 ? 0 : -1);
             } catch (Exception e) {
-                // 忽略
+                // ignore
             }
         }
         mSettingItemView.setSelection(0);
@@ -1448,17 +1451,19 @@ public class LivePlayActivity extends BaseActivity {
 
     private void initDayList() {
         liveDayList.clear();
+        liveEpgDateList.clear();
         Calendar calendar = Calendar.getInstance();
         calendar.setTime(new Date());
         for (int i = 0; i < 8; i++) {
-            LiveDayListGroup dayGroup = new LiveDayListGroup();
-            dayGroup.setDatePresented(formatDate1.format(calendar.getTime()));
-            dayGroup.setDate(formatDate.format(calendar.getTime()));
-            liveDayList.add(dayGroup);
+            // 使用 LiveEpgDate 替代 LiveDayListGroup 以匹配适配器
+            LiveEpgDate dateItem = new LiveEpgDate();
+            dateItem.setDatePresented(formatDate1.format(calendar.getTime()));
+            dateItem.setDate(formatDate.format(calendar.getTime()));
+            liveEpgDateList.add(dateItem);
             calendar.add(Calendar.DAY_OF_MONTH, -1);
         }
         if (liveEpgDateAdapter != null) {
-            liveEpgDateAdapter.setNewData(liveDayList);
+            liveEpgDateAdapter.setNewData(liveEpgDateList);
             liveEpgDateAdapter.setSelectedIndex(0);
         }
     }
@@ -1524,11 +1529,10 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     private void initLiveChannelList() {
-        // 从 ApiConfig 获取直播频道列表（如果存在）
         try {
             liveChannelGroupList = ApiConfig.get().getLiveChannelGroupList();
         } catch (Exception e) {
-            LOG.e("initLiveChannelList error", e);
+            Log.e("LivePlay", "initLiveChannelList error", e);
             liveChannelGroupList = new ArrayList<>();
         }
         if (liveChannelGroupList == null || liveChannelGroupList.isEmpty()) {
@@ -1536,7 +1540,7 @@ public class LivePlayActivity extends BaseActivity {
             return;
         }
         int lastGroup = Hawk.get(HawkConfig.LIVE_GROUP_INDEX, 0);
-        int lastChannel = Hawk.get(HawkConfig.LIVE_CHANNEL_INDEX, 0);
+        int lastChannel = Hawk.get("live_channel_index", 0); // fallback
         if (lastGroup >= liveChannelGroupList.size()) lastGroup = 0;
         LiveChannelGroup group = liveChannelGroupList.get(lastGroup);
         if (group == null || group.getLiveChannels() == null || lastChannel >= group.getLiveChannels().size()) {
