@@ -10,12 +10,6 @@ import com.github.tvbox.osc.bean.LiveSettingItem;
 
 import java.util.ArrayList;
 
-
-/**
- * @author pj567
- * @date :2021/1/12
- * @description:
- */
 public class LiveSettingItemAdapter extends BaseQuickAdapter<LiveSettingItem, BaseViewHolder> {
     private int focusedItemIndex = -1;
 
@@ -50,6 +44,14 @@ public class LiveSettingItemAdapter extends BaseQuickAdapter<LiveSettingItem, Ba
             notifyItemChanged(selectedItemIndex);
         }
     }
+
+    // ========== 酷9兼容方法 ==========
+    public void setSelectedPosition(int position) {
+        if (position >= 0 && position < getData().size()) {
+            selectItem(position, true, true);
+        }
+    }
+    // ========== 兼容方法结束 ==========
 
     public void setFocusedItemIndex(int focusedItemIndex) {
         int preFocusItemIndex = this.focusedItemIndex;
