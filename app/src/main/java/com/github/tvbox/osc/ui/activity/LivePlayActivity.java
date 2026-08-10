@@ -801,7 +801,7 @@ public class LivePlayActivity extends BaseActivity {
 
     private void initShortcuts() {
         shortcutsList.clear();
-        shortcutsList.add(new ShortcutsBean("Collect", R.drawable.ic_collect));
+        shortcutsList.add(new ShortcutsBean("Collect", R.drawable.app_icon));
         shortcutsList.add(new ShortcutsBean("Search", R.drawable.ic_search));
         shortcutsList.add(new ShortcutsBean("Settings", R.drawable.ic_setting));
         shortcutsList.add(new ShortcutsBean("Info", R.drawable.ic_info));
