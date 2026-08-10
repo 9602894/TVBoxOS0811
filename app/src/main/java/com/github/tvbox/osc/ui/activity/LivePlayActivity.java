@@ -1552,43 +1552,70 @@ public class LivePlayActivity extends BaseActivity {
         ApiConfig api = ApiConfig.get();
         List<LiveChannelGroup> list = api.getChannelGroupList();
 
-        // 如果频道列表为空，尝试从已加载的配置中解析 lives
-        if (list == null || list.isEmpty()) {
-            try {
-                java.lang.reflect.Method getLiveMethod = api.getClass().getMethod("getLive");
-                Object livesObj = getLiveMethod.invoke(api);
-                if (livesObj != null) {
-                    com.google.gson.JsonArray livesArray = (com.google.gson.JsonArray) livesObj;
-                    if (livesArray.size() > 0) {
-                        java.lang.reflect.Method loadLivesMethod = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
-                        loadLivesMethod.invoke(api, livesArray);
-                        list = api.getChannelGroupList();
-                    }
-                }
-            } catch (Exception e) {
-                Log.e("LivePlay", "reload lives error", e);
-            }
-        }
-
-        if (list == null || list.isEmpty()) {
-            Toast.makeText(this, "暂无直播频道，请先在首页加载配置", Toast.LENGTH_LONG).show();
+        if (list != null && !list.isEmpty()) {
+            applyChannelList(list);
             return;
         }
-        applyChannelList(list);
+
+        // 从已解析的 lives 配置加载
+        try {
+            java.lang.reflect.Method getLive = api.getClass().getMethod("getLive");
+            Object lives = getLive.invoke(api);
+            if (lives != null && lives instanceof com.google.gson.JsonArray 
+                    && ((com.google.gson.JsonArray)lives).size() > 0) {
+                java.lang.reflect.Method loadLives = api.getClass().getMethod("loadLives", com.google.gson.JsonArray.class);
+                loadLives.invoke(api, lives);
+                list = api.getChannelGroupList();
+                if (list != null && !list.isEmpty()) {
+                    applyChannelList(list);
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            Log.e("LivePlay", "lives reload error: " + e.getMessage());
+        }
+
+        //  lives 也没有，从接口地址拉取完整配置
+        String apiUrl = Hawk.get(HawkConfig.API_URL, "");
+        if (apiUrl == null || apiUrl.trim().isEmpty()) {
+            Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        showLoading();
+        api.loadConfig(false, new ApiConfig.LoadConfigCallback() {
+            @Override
+            public void success() {
+                runOnUiThread(() -> {
+                    showSuccess();
+                    List<LiveChannelGroup> loaded = api.getChannelGroupList();
+                    if (loaded != null && !loaded.isEmpty()) {
+                        applyChannelList(loaded);
+                    } else {
+                        Toast.makeText(LivePlayActivity.this, "配置中无直播源", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            }
+            @Override
+            public void error(String msg) {
+                runOnUiThread(() -> {
+                    showSuccess();
+                    Toast.makeText(LivePlayActivity.this, "加载失败: " + msg, Toast.LENGTH_SHORT).show();
+                });
+            }
+            @Override
+            public void notice(String msg) {}
+        });
     }
 
     private void applyChannelList(List<LiveChannelGroup> list) {
         liveChannelGroupList.clear();
         liveChannelGroupList.addAll(list);
-
         if (liveChannelGroupAdapter != null) {
             liveChannelGroupAdapter.setNewData(new ArrayList<>(liveChannelGroupList));
         }
-
-        int groupIndex = 0;
-        int channelIndex = 0;
+        int groupIndex = 0, channelIndex = 0;
         String lastChannel = Hawk.get(HawkConfig.LIVE_CHANNEL, "");
-
         outer:
         for (int g = 0; g < liveChannelGroupList.size(); g++) {
             LiveChannelGroup group = liveChannelGroupList.get(g);
@@ -1596,13 +1623,10 @@ public class LivePlayActivity extends BaseActivity {
             for (int c = 0; c < group.getLiveChannels().size(); c++) {
                 LiveChannelItem item = group.getLiveChannels().get(c);
                 if (item != null && item.getChannelName().equals(lastChannel)) {
-                    groupIndex = g;
-                    channelIndex = c;
-                    break outer;
+                    groupIndex = g; channelIndex = c; break outer;
                 }
             }
         }
-
         playChannel(groupIndex, channelIndex, false);
     }
 
