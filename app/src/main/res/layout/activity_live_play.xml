@@ -1,77 +1,14 @@
-<?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/live_root"
+<!-- 在适当位置添加以下ID，确保不重复 -->
+<View
+    android:id="@+id/switchChannelSnapshotOverlay"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:layout_margin="0dp"
-    android:padding="0dp">
+    android:visibility="gone"
+    android:background="#000000" />
 
-    <xyz.doikki.videoplayer.player.VideoView
-        android:id="@+id/mVideoView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
-    <androidx.media3.ui.SubtitleView
-        android:id="@+id/mSubtitleView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_centerInParent="true"
-        android:visibility="gone" />
-
-    <TextView
-        android:id="@+id/tv_selected_channel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="end|top"
-        android:layout_marginTop="25dp"
-        android:layout_marginRight="40dp"
-        android:background="@android:color/transparent"
-        android:clickable="false"
-        android:focusable="false"
-        android:shadowColor="#80000000"
-        android:shadowDx="2"
-        android:shadowDy="2"
-        android:shadowRadius="2"
-        android:textColor="@android:color/white"
-        android:textSize="96sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
-
-    <include layout="@layout/activity_tv_time_group" />
-
-    <TextView
-        android:id="@+id/tvNetSpeed"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="end|bottom"
-        android:layout_marginEnd="15dp"
-        android:layout_marginBottom="15dp"
-        android:background="@drawable/shape_time_netspeed_drawable"
-        android:padding="5dp"
-        android:text="0.00MB/s"
-        android:textColor="#FFFFFF"
-        android:textSize="15dp"
-        android:visibility="gone" />
-
-    <include layout="@layout/dialog_bottom_group" />
-    <include layout="@layout/dialog_channel_group" />
-    <include layout="@layout/dialog_search" />
-    <include layout="@layout/dialog_seek_bar" />
-    <include layout="@layout/dialog_set_group" />
-    <include layout="@layout/dialog_shortcuts_menu" />
-    <include layout="@layout/dialog_play_messgae" />
-    <include layout="@layout/dialog_track" />
-    <include layout="@layout/dialog_theme" />
-
-    <ProgressBar
-        android:id="@+id/loadingProgressBar"
-        style="?android:attr/progressBarStyleSmall"
-        android:layout_width="45dp"
-        android:layout_height="45dp"
-        android:layout_gravity="center"
-        android:indeterminate="true"
-        android:scaleX="0.75"
-        android:scaleY="0.75"
-        android:visibility="gone" />
-
-</FrameLayout>
+<ImageView
+    android:id="@+id/switchChannelSnapshotImage"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:visibility="gone"
+    android:scaleType="fitXY" />
