@@ -2,6 +2,7 @@ package com.github.tvbox.osc.ui.activity;
 
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -13,6 +14,7 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -89,8 +91,7 @@ import okhttp3.Response;
 import xyz.doikki.videoplayer.player.VideoView;
 
 /**
- * LivePlayActivity - 整合酷9全部功能，自包含所有适配器，不依赖额外布局文件
- * 未配置接口时引导用户返回主界面设置
+ * LivePlayActivity - 整合酷9全部功能，自包含所有适配器，内置设置对话框
  */
 public class LivePlayActivity extends BaseActivity {
     public static Context context;
@@ -218,9 +219,6 @@ public class LivePlayActivity extends BaseActivity {
             tv_right_top_channel_name = findViewById(R.id.tv_right_top_channel_name);
             tv_right_top_epg_name = findViewById(R.id.tv_right_top_epg_name);
             iv_circle_bg = findViewById(R.id.iv_circle_bg);
-            // tv_shownum 已移除（如果不需要）
-            // 如果有该控件，请取消注释并添加 findViewById
-            // TextView tv_shownum = findViewById(R.id.tv_shownum);
             txtNoEpg = findViewById(R.id.txtNoEpg);
             ll_right_top_loading = findViewById(R.id.ll_right_top_loading);
             ll_right_top_huikan = findViewById(R.id.ll_right_top_huikan);
@@ -274,7 +272,6 @@ public class LivePlayActivity extends BaseActivity {
         initLiveChannelView();
         initSettingGroupView();
         initSettingItemView();
-        initLiveChannelList();
         initLiveSettingGroupList();
         Hawk.put(HawkConfig.PLAYER_IS_LIVE, true);
 
@@ -286,24 +283,60 @@ public class LivePlayActivity extends BaseActivity {
         // ---------- 网速更新 ----------
         mHandler.postDelayed(mUpdateNetSpeedRun, 1000);
 
-        // ---------- 检查接口地址是否配置 ----------
+        // ---------- 检查接口地址是否配置，若未配置则弹出设置对话框 ----------
         checkApiConfig();
     }
 
-    // ========== 检查接口配置，若未配置则引导进入设置 ==========
+    // ========== 检查接口配置，若未配置则弹出设置对话框 ==========
     private void checkApiConfig() {
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (TextUtils.isEmpty(apiUrl)) {
-            // 显示提示并引导
-            Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
-            // 按返回键或菜单键将触发 gotoSetting()
+            // 延迟显示对话框，确保界面已初始化
+            mHandler.postDelayed(() -> showSettingDialog(), 300);
+        } else {
+            // 已有接口地址，正常加载直播源
+            initLiveChannelList();
         }
     }
 
-    // ========== 跳转到设置（引导用户返回主界面） ==========
-    private void gotoSetting() {
-        Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
-        finish();
+    // ========== 显示设置对话框（内置） ==========
+    private void showSettingDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("设置接口地址");
+
+        final EditText input = new EditText(this);
+        input.setHint("请输入接口地址，如 http://xxx.com/xxx.json");
+        String savedUrl = Hawk.get(HawkConfig.API_URL, "");
+        if (!TextUtils.isEmpty(savedUrl)) {
+            input.setText(savedUrl);
+        }
+        builder.setView(input);
+
+        builder.setPositiveButton("确定", (dialog, which) -> {
+            String url = input.getText().toString().trim();
+            if (TextUtils.isEmpty(url)) {
+                Toast.makeText(LivePlayActivity.this, "地址不能为空", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            Hawk.put(HawkConfig.API_URL, url);
+            Toast.makeText(LivePlayActivity.this, "已保存，正在加载...", Toast.LENGTH_SHORT).show();
+            // 重新加载直播源
+            initLiveChannelList();
+            // 刷新 EPG 地址
+            epgStringAddress = getConfiguredEpgAddress();
+        });
+
+        builder.setNegativeButton("取消", (dialog, which) -> {
+            // 用户取消，提示并关闭 Activity（或允许继续）
+            Toast.makeText(LivePlayActivity.this, "请先设置接口地址", Toast.LENGTH_SHORT).show();
+            // 如果用户取消，可以退出或再次提示；这里不退出，让用户继续操作
+            // 但为了不卡死，我们再次弹出对话框
+            mHandler.postDelayed(() -> showSettingDialog(), 500);
+        });
+
+        builder.setCancelable(false);
+        AlertDialog dialog = builder.create();
+        dialog.show();
     }
 
     // ========== 播放控制初始化 ==========
@@ -528,6 +561,12 @@ public class LivePlayActivity extends BaseActivity {
 
     // ========== 加载直播源 ==========
     private void initLiveChannelList() {
+        String apiUrl = Hawk.get(HawkConfig.API_URL, "");
+        if (TextUtils.isEmpty(apiUrl)) {
+            Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_SHORT).show();
+            showSettingDialog();
+            return;
+        }
         ApiConfig api = ApiConfig.get();
         List<LiveChannelGroup> list = api.getChannelGroupList();
         if (list != null && !list.isEmpty()) {
@@ -542,6 +581,7 @@ public class LivePlayActivity extends BaseActivity {
         final String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (apiUrl == null || apiUrl.trim().isEmpty()) {
             Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_LONG).show();
+            showSettingDialog();
             return;
         }
         showLoading();
@@ -1491,33 +1531,26 @@ public class LivePlayActivity extends BaseActivity {
         }
     };
 
-    // ========== 键盘事件（增加进入设置功能） ==========
+    // ========== 键盘事件 ==========
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             int keyCode = event.getKeyCode();
 
-            // 如果未配置接口或频道列表为空，按菜单键或确认键引导进入设置
+            // 如果未配置接口或频道列表为空，按菜单键、确认键、返回键都弹出设置对话框
             String apiUrl = Hawk.get(HawkConfig.API_URL, "");
             boolean needSetting = TextUtils.isEmpty(apiUrl) || liveChannelGroupList.isEmpty();
 
             if (needSetting) {
-                // 菜单键或确认键进入设置
-                if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER) {
-                    gotoSetting();
+                if (keyCode == KeyEvent.KEYCODE_MENU || keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                        keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_BACK) {
+                    showSettingDialog();
                     return true;
                 }
-                // 返回键也进入设置
-                if (keyCode == KeyEvent.KEYCODE_BACK) {
-                    gotoSetting();
-                    return true;
-                }
-                // 其他按键忽略或显示提示
                 if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
                     Toast.makeText(this, "请先设置接口地址", Toast.LENGTH_SHORT).show();
                     return true;
                 }
-                // 让其他按键继续传递，但 UI 无反应
                 return super.dispatchKeyEvent(event);
             }
 
@@ -1972,10 +2005,10 @@ public class LivePlayActivity extends BaseActivity {
     // ========== 生命周期 ==========
     @Override
     public void onBackPressed() {
-        // 如果未配置接口或频道列表为空，跳转到设置
+        // 如果未配置接口或频道列表为空，弹出设置对话框
         String apiUrl = Hawk.get(HawkConfig.API_URL, "");
         if (TextUtils.isEmpty(apiUrl) || liveChannelGroupList.isEmpty()) {
-            gotoSetting();
+            showSettingDialog();
             return;
         }
 
