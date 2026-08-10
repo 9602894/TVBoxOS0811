@@ -62,8 +62,8 @@ public class RemoteServer extends NanoHTTPD {
     private boolean isStarted = false;
     private DataReceiver mDataReceiver;
     public static String m3u8Content;
-    private ArrayList getRequestList = new ArrayList<>();
-    private ArrayList postRequestList = new ArrayList<>();
+    private ArrayList<RequestProcess> getRequestList = new ArrayList<>();
+    private ArrayList<RequestProcess> postRequestList = new ArrayList<>();
 
     public RemoteServer(int port, Context context) {
         super(port);
@@ -118,10 +118,10 @@ public class RemoteServer extends NanoHTTPD {
             );
             if (rs.length >= 4 && rs[3] instanceof Map) {
                 @SuppressWarnings("unchecked")
-                Map mapHeader = (Map) rs[3];
+                Map<String, String> mapHeader = (Map<String, String>) rs[3];
                 if(!mapHeader.isEmpty()){
                     for (String key : mapHeader.keySet()) {
-                        response.addHeader(key, (String) mapHeader.get(key));
+                        response.addHeader(key, mapHeader.get(key));
                     }
                 }
             }
@@ -208,7 +208,7 @@ public class RemoteServer extends NanoHTTPD {
                     }
                 }
             } else if (session.getMethod() == Method.POST) {
-                Map files = new HashMap();
+                Map<String, String> files = new HashMap<>();
                 try {
                     if (session.getHeaders().containsKey("content-type")) {
                         String hd = session.getHeaders().get("content-type");
@@ -234,7 +234,7 @@ public class RemoteServer extends NanoHTTPD {
                     }
                 }
                 try {
-                    Map params = session.getParms();
+                    Map<String, String> params = session.getParms();
                     if (fileName.equals("/upload")) {
                         String path = params.get("path");
                         for (String k : files.keySet()) {
@@ -295,14 +295,14 @@ public class RemoteServer extends NanoHTTPD {
         return getRequestList.get(0).doResponse(session, "", null, null);
     }
 
-    private boolean isProxyRequest(String fileName, Map params) {
+    private boolean isProxyRequest(String fileName, Map<String, String> params) {
         if (params == null) return false;
         if (!params.containsKey("do") && !params.containsKey("go")) return false;
         return fileName.equals("/proxy") || fileName.equals("/");
     }
 
     private Response handleProxy(IHTTPSession session) {
-        Map params = session.getParms();
+        Map<String, String> params = session.getParms();
         params.putAll(session.getHeaders());
         if (params.containsKey("do")) {
             boolean isDanmuProxy = "danmu".equals(params.get("do"));
@@ -318,7 +318,7 @@ public class RemoteServer extends NanoHTTPD {
         return getProxy(null);
     }
 
-    private Response handleAction(Map params) {
+    private Response handleAction(Map<String, String> params) {
         if (params == null) return createPlainTextResponse(Response.Status.OK, "ok");
         String action = params.get("do");
         if ("refresh".equals(action)) {
@@ -327,7 +327,7 @@ public class RemoteServer extends NanoHTTPD {
         return createPlainTextResponse(Response.Status.OK, "ok");
     }
 
-    private void handleRefreshAction(Map params) {
+    private void handleRefreshAction(Map<String, String> params) {
         String type = params.get("type");
         if ("danmaku".equals(type)) {
             String path = params.get("path");
@@ -335,7 +335,7 @@ public class RemoteServer extends NanoHTTPD {
         }
     }
 
-    private void normalizeDanmuParams(Map params) {
+    private void normalizeDanmuParams(Map<String, String> params) {
         try {
             VodInfo vodInfo = App.getInstance().getVodInfo();
             if (vodInfo == null) return;
@@ -351,7 +351,7 @@ public class RemoteServer extends NanoHTTPD {
 
     private String getCurrentEpisodeIndex(VodInfo vodInfo) {
         if (vodInfo.seriesMap != null && !TextUtils.isEmpty(vodInfo.playFlag)) {
-            java.util.List series = vodInfo.seriesMap.get(vodInfo.playFlag);
+            java.util.List<VodInfo.VodSeries> series = vodInfo.seriesMap.get(vodInfo.playFlag);
             if (series != null && vodInfo.playIndex >= 0 && vodInfo.playIndex < series.size()) {
                 VodInfo.VodSeries current = series.get(vodInfo.playIndex);
                 if (current != null && !TextUtils.isEmpty(current.name)) {
@@ -408,14 +408,14 @@ public class RemoteServer extends NanoHTTPD {
         int ipAddress = wifiManager.getConnectionInfo().getIpAddress();
         if (ipAddress == 0) {
             try {
-                Enumeration enumerationNi = NetworkInterface.getNetworkInterfaces();
+                Enumeration<NetworkInterface> enumerationNi = NetworkInterface.getNetworkInterfaces();
                 while (enumerationNi.hasMoreElements()) {
-                    NetworkInterface networkInterface = (NetworkInterface) enumerationNi.nextElement();
+                    NetworkInterface networkInterface = enumerationNi.nextElement();
                     String interfaceName = networkInterface.getDisplayName();
                     if (interfaceName.equals("eth0") || interfaceName.equals("wlan0")) {
-                        Enumeration enumIpAddr = networkInterface.getInetAddresses();
+                        Enumeration<InetAddress> enumIpAddr = networkInterface.getInetAddresses();
                         while (enumIpAddr.hasMoreElements()) {
-                            InetAddress inetAddress = (InetAddress) enumIpAddr.nextElement();
+                            InetAddress inetAddress = enumIpAddr.nextElement();
                             if (!inetAddress.isLoopbackAddress() && inetAddress instanceof Inet4Address) {
                                 return inetAddress.getHostAddress();
                             }
@@ -486,9 +486,9 @@ public class RemoteServer extends NanoHTTPD {
             destDir.mkdirs();
         }
         ZipFile zip = new ZipFile(zipFilePath);
-        Enumeration iter = (Enumeration) zip.entries();
+        Enumeration<? extends ZipEntry> iter = zip.entries();
         while (iter.hasMoreElements()) {
-            ZipEntry entry = (ZipEntry) iter.nextElement();
+            ZipEntry entry = iter.nextElement();
             InputStream is = zip.getInputStream(entry);
             String filePath = destDirectory + File.separator + entry.getName();
             if (!entry.isDirectory()) {
