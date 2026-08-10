@@ -5,21 +5,28 @@ import static xyz.doikki.videoplayer.util.PlayerUtils.safeTimeMs;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.text.TextUtils;
 import android.util.Log;
+import android.view.Gravity;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.github.tvbox.osc.R;
@@ -33,6 +40,7 @@ import com.github.tvbox.osc.bean.LiveEpgDate;
 import com.github.tvbox.osc.bean.LivePlayerManager;
 import com.github.tvbox.osc.bean.LiveSettingGroup;
 import com.github.tvbox.osc.bean.LiveSettingItem;
+import com.github.tvbox.osc.bean.ShortcutsBean;
 import com.github.tvbox.osc.player.controller.LiveController;
 import com.github.tvbox.osc.ui.adapter.LiveChannelGroupAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveChannelItemAdapter;
@@ -41,6 +49,9 @@ import com.github.tvbox.osc.ui.adapter.LiveEpgDateAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveSettingGroupAdapter;
 import com.github.tvbox.osc.ui.adapter.LiveSettingItemAdapter;
 import com.github.tvbox.osc.ui.adapter.MyEpgAdapter;
+import com.github.tvbox.osc.ui.adapter.SearchChannelAdapter;
+import com.github.tvbox.osc.ui.adapter.ShortcutsMenuAdapter;
+import com.github.tvbox.osc.ui.adapter.TrackListAdapter;
 import com.github.tvbox.osc.util.EpgUtil;
 import com.github.tvbox.osc.util.HawkConfig;
 import com.github.tvbox.osc.util.LOG;
@@ -71,11 +82,15 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 import xyz.doikki.videoplayer.player.VideoView;
 
 public class LivePlayActivity extends BaseActivity {
@@ -187,20 +202,22 @@ public class LivePlayActivity extends BaseActivity {
     private ShortcutsMenuAdapter shortcutsMenuAdapter;
     private SearchChannelAdapter searchChannelAdapter;
     private TrackListAdapter trackListAdapter;
-    private TvRecyclerView mShortcutsMenuView;
-    private TvRecyclerView mSearchChannelView;
-    private View dialogShortcutsMenu;
-    private View dialogSearchChannel;
-    private View dialogTrackList;
-    private boolean isSettingMenuVisible = false;
-    private boolean isShortcutsMenuVisible = false;
-    private boolean isSearchVisible = false;
+    // 弹窗视图
+    private View dialogShortcutsMenuView;
+    private View dialogSearchView;
+    private View dialogTrackView;
+    private PopupWindow shortcutsPopupWindow;
+    private PopupWindow searchPopupWindow;
+    private PopupWindow trackPopupWindow;
 
     private boolean loadingLiveConfigOnEnter = false;
 
     // 添加缺失的成员变量
     private TextView tv_currentpos;
     private TextView tv_duration;
+    // EPG底部节目名称
+    private TextView tv_current_program_name;
+    private TextView tv_next_program_name;
 
     @Override
     protected int getLayoutResID() {
@@ -260,6 +277,8 @@ public class LivePlayActivity extends BaseActivity {
             iv_playpause = findViewById(R.id.iv_playpause);
             iv_play = findViewById(R.id.iv_play);
             tvSelectedChannel = findViewById(R.id.tv_selected_channel);
+            tv_current_program_name = findViewById(R.id.tv_current_program_name);
+            tv_next_program_name = findViewById(R.id.tv_next_program_name);
 
             if (imgLiveIcon != null) imgLiveIcon.setVisibility(View.INVISIBLE);
             if (liveIconNullText != null) liveIconNullText.setVisibility(View.INVISIBLE);
@@ -351,13 +370,203 @@ public class LivePlayActivity extends BaseActivity {
         initLiveChannelList();
         initLiveSettingGroupList();
         Hawk.put(HawkConfig.PLAYER_IS_LIVE, true);
+        // 初始化酷9的快捷菜单、搜索、音轨切换
         initShortcutsMenuView();
         initSearchChannelView();
         initTrackListView();
 
+        // 定时更新网速
+        mHandler.postDelayed(mUpdateNetSpeedRun, 1000);
     }
 
-    // ========== EPG 相关方法 ==========
+    // ========== 酷9新增模块初始化 ==========
+    private void initShortcutsMenuView() {
+        if (dialogShortcutsMenuView == null) {
+            dialogShortcutsMenuView = LayoutInflater.from(this).inflate(R.layout.dialog_shortcuts_menu, null);
+            RecyclerView rv = dialogShortcutsMenuView.findViewById(R.id.rv_shortcuts_menu);
+            if (rv != null) {
+                rv.setLayoutManager(new V7LinearLayoutManager(this, 1, false));
+                shortcutsMenuAdapter = new ShortcutsMenuAdapter();
+                // 构建快捷菜单数据
+                List<ShortcutsBean> shortcutsList = new ArrayList<>();
+                shortcutsList.add(new ShortcutsBean("解码方式", ShortcutsBean.TYPE_DECODER));
+                shortcutsList.add(new ShortcutsBean("画面比例", ShortcutsBean.TYPE_SCALE));
+                shortcutsList.add(new ShortcutsBean("时移", ShortcutsBean.TYPE_TIME_SHIFT));
+                shortcutsList.add(new ShortcutsBean("回看", ShortcutsBean.TYPE_LOOK_BACK));
+                shortcutsList.add(new ShortcutsBean("换源", ShortcutsBean.TYPE_SOURCE));
+                shortcutsList.add(new ShortcutsBean("显示EPG", ShortcutsBean.TYPE_EPG));
+                shortcutsMenuAdapter.setNewData(shortcutsList);
+                rv.setAdapter(shortcutsMenuAdapter);
+                shortcutsMenuAdapter.setOnItemClickListener((adapter, view, position) -> {
+                    ShortcutsBean item = shortcutsMenuAdapter.getItem(position);
+                    if (item != null) {
+                        handleShortcutItemClick(item.getType());
+                    }
+                    if (shortcutsPopupWindow != null) shortcutsPopupWindow.dismiss();
+                });
+            }
+        }
+        if (shortcutsPopupWindow == null) {
+            shortcutsPopupWindow = new PopupWindow(dialogShortcutsMenuView,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            shortcutsPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            shortcutsPopupWindow.setOutsideTouchable(true);
+            shortcutsPopupWindow.setFocusable(true);
+        }
+    }
+
+    private void initSearchChannelView() {
+        if (dialogSearchView == null) {
+            dialogSearchView = LayoutInflater.from(this).inflate(R.layout.dialog_search, null);
+            RecyclerView rv = dialogSearchView.findViewById(R.id.rv_search_channel);
+            if (rv != null) {
+                rv.setLayoutManager(new V7LinearLayoutManager(this, 1, false));
+                searchChannelAdapter = new SearchChannelAdapter();
+                // 初始数据为空，搜索时填充
+                searchChannelAdapter.setNewData(new ArrayList<>());
+                rv.setAdapter(searchChannelAdapter);
+                // 设置点击监听，点击搜索结果切换频道
+                searchChannelAdapter.setOnItemClickListener((adapter, view, position) -> {
+                    LiveChannelItem item = searchChannelAdapter.getItem(position);
+                    if (item != null) {
+                        // 查找该频道在分组中的位置
+                        for (int g = 0; g < liveChannelGroupList.size(); g++) {
+                            LiveChannelGroup group = liveChannelGroupList.get(g);
+                            if (group != null && group.getLiveChannels() != null) {
+                                int idx = group.getLiveChannels().indexOf(item);
+                                if (idx >= 0) {
+                                    playChannel(g, idx, true);
+                                    break;
+                                }
+                            }
+                        }
+                        if (searchPopupWindow != null) searchPopupWindow.dismiss();
+                    }
+                });
+                // 搜索输入框监听（假设布局中有 EditText 或通过按键输入）
+                // 此处可以通过 setOnEditorActionListener 或外部输入触发搜索
+                // 本例中将在按键事件中处理搜索
+                // 另外提供搜索过滤方法
+                // 因为对话框可能包含 EditText，这里留给使用者自行实现
+            }
+        }
+        if (searchPopupWindow == null) {
+            searchPopupWindow = new PopupWindow(dialogSearchView,
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.6),
+                    ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            searchPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            searchPopupWindow.setOutsideTouchable(true);
+            searchPopupWindow.setFocusable(true);
+        }
+    }
+
+    private void initTrackListView() {
+        if (dialogTrackView == null) {
+            dialogTrackView = LayoutInflater.from(this).inflate(R.layout.dialog_track, null);
+            RecyclerView rv = dialogTrackView.findViewById(R.id.rv_track);
+            if (rv != null) {
+                rv.setLayoutManager(new V7LinearLayoutManager(this, 1, false));
+                trackListAdapter = new TrackListAdapter();
+                rv.setAdapter(trackListAdapter);
+                trackListAdapter.setOnItemClickListener((adapter, view, position) -> {
+                    // 切换音轨/字幕/视频轨
+                    TrackListAdapter.TrackItem track = trackListAdapter.getItem(position);
+                    if (track != null && mVideoView != null) {
+                        // 根据轨道类型切换
+                        // 此处需要播放器支持，这里仅做示例
+                        Toast.makeText(this, "切换轨道: " + track.getName(), Toast.LENGTH_SHORT).show();
+                        // 实际调用 mVideoView.switchTrack(...)
+                    }
+                    if (trackPopupWindow != null) trackPopupWindow.dismiss();
+                });
+            }
+        }
+        if (trackPopupWindow == null) {
+            trackPopupWindow = new PopupWindow(dialogTrackView,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT, true);
+            trackPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            trackPopupWindow.setOutsideTouchable(true);
+            trackPopupWindow.setFocusable(true);
+        }
+    }
+
+    // 快捷菜单点击处理
+    private void handleShortcutItemClick(int type) {
+        switch (type) {
+            case ShortcutsBean.TYPE_DECODER:
+                // 切换解码器
+                Toast.makeText(this, "切换解码器", Toast.LENGTH_SHORT).show();
+                break;
+            case ShortcutsBean.TYPE_SCALE:
+                // 切换画面比例
+                Toast.makeText(this, "切换画面比例", Toast.LENGTH_SHORT).show();
+                break;
+            case ShortcutsBean.TYPE_TIME_SHIFT:
+                // 时移
+                Toast.makeText(this, "时移", Toast.LENGTH_SHORT).show();
+                break;
+            case ShortcutsBean.TYPE_LOOK_BACK:
+                // 回看
+                Toast.makeText(this, "回看", Toast.LENGTH_SHORT).show();
+                break;
+            case ShortcutsBean.TYPE_SOURCE:
+                // 换源
+                if (currentLiveChannelItem != null) {
+                    int nextSource = currentLiveChannelItem.getSourceIndex() + 1;
+                    if (nextSource >= currentLiveChannelItem.getSourceNum()) nextSource = 0;
+                    currentLiveChannelItem.setSourceIndex(nextSource);
+                    playChannel(currentChannelGroupIndex, currentLiveChannelIndex, false);
+                }
+                break;
+            case ShortcutsBean.TYPE_EPG:
+                // 显示/隐藏 EPG
+                if (divEpg != null) {
+                    divEpg.setVisibility(divEpg.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+                }
+                break;
+        }
+    }
+
+    // ========== 显示/隐藏酷9弹窗 ==========
+    private void showShortcutsMenu() {
+        if (shortcutsPopupWindow != null && !shortcutsPopupWindow.isShowing()) {
+            shortcutsPopupWindow.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        }
+    }
+
+    private void showSearchDialog() {
+        if (searchPopupWindow != null && !searchPopupWindow.isShowing()) {
+            // 填充全部频道数据供搜索
+            List<LiveChannelItem> allChannels = new ArrayList<>();
+            for (LiveChannelGroup group : liveChannelGroupList) {
+                if (group != null && group.getLiveChannels() != null) {
+                    allChannels.addAll(group.getLiveChannels());
+                }
+            }
+            searchChannelAdapter.setNewData(allChannels);
+            searchPopupWindow.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        }
+    }
+
+    private void showTrackDialog() {
+        if (trackPopupWindow != null && !trackPopupWindow.isShowing()) {
+            // 从播放器获取轨道信息并更新适配器
+            // 这里需要实现获取音轨/字幕列表的方法，假设 mVideoView 有 getTracks()
+            if (mVideoView != null) {
+                // 示例：模拟轨道数据
+                List<TrackListAdapter.TrackItem> tracks = new ArrayList<>();
+                tracks.add(new TrackListAdapter.TrackItem("音轨1", TrackListAdapter.TrackType.AUDIO));
+                tracks.add(new TrackListAdapter.TrackItem("音轨2", TrackListAdapter.TrackType.AUDIO));
+                tracks.add(new TrackListAdapter.TrackItem("字幕1", TrackListAdapter.TrackType.SUBTITLE));
+                trackListAdapter.setNewData(tracks);
+            }
+            trackPopupWindow.showAtLocation(getWindow().getDecorView(), Gravity.CENTER, 0, 0);
+        }
+    }
+
+    // ========== 原有 EPG 相关方法（完整保留） ==========
     private List<Epginfo> epgdata = new ArrayList<>();
 
     private void showEpg(Date date, ArrayList<Epginfo> arrayList) {
@@ -549,16 +758,16 @@ public class LivePlayActivity extends BaseActivity {
 
     private void requestEpg(String url, Date date, String channelNameReal, String finalEpgTagName, String savedEpgKey,
                             ArrayList<String> epgQueryNames, SimpleDateFormat timeFormat, int queryIndex) {
-        okhttp3.OkHttpClient client = OkGoHelper.getDefaultClient();
+        OkHttpClient client = OkGoHelper.getDefaultClient();
         if (client == null) client = com.github.catvod.net.OkHttp.client();
-        client.newCall(new okhttp3.Request.Builder().url(url).build()).enqueue(new okhttp3.Callback() {
+        client.newCall(new Request.Builder().url(url).build()).enqueue(new Callback() {
             @Override
-            public void onFailure(okhttp3.Call call, IOException e) {
+            public void onFailure(Call call, IOException e) {
                 mHandler.post(() -> onEpgRequestFailure(date, channelNameReal, finalEpgTagName, savedEpgKey, epgQueryNames, timeFormat, queryIndex));
             }
 
             @Override
-            public void onResponse(okhttp3.Call call, okhttp3.Response response) throws IOException {
+            public void onResponse(Call call, Response response) throws IOException {
                 if (response.code() != 200) {
                     response.close();
                     mHandler.post(() -> onEpgRequestFailure(date, channelNameReal, finalEpgTagName, savedEpgKey, epgQueryNames, timeFormat, queryIndex));
@@ -822,8 +1031,6 @@ public class LivePlayActivity extends BaseActivity {
             setDefaultBottomEpg();
         }
     }
-    private TextView tv_current_program_name;
-    private TextView tv_next_program_name;
 
     private void setDefaultBottomEpg() {
         if (tv_curepg_left != null) tv_curepg_left.setText("正在播出");
@@ -938,17 +1145,22 @@ public class LivePlayActivity extends BaseActivity {
         if (mHandler != null) mHandler.removeCallbacksAndMessages(null);
         if (countDownTimer != null) countDownTimer.cancel();
         if (objectAnimator != null) objectAnimator.cancel();
+        if (shortcutsPopupWindow != null) shortcutsPopupWindow.dismiss();
+        if (searchPopupWindow != null) searchPopupWindow.dismiss();
+        if (trackPopupWindow != null) trackPopupWindow.dismiss();
     }
 
-    // ========== 按键事件处理 ==========
+    // ========== 按键事件处理（整合酷9模块） ==========
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction() == KeyEvent.ACTION_DOWN) {
             int keyCode = event.getKeyCode();
+            // 数字键选台
             if (keyCode >= KeyEvent.KEYCODE_0 && keyCode <= KeyEvent.KEYCODE_9) {
                 numericKeyDown(keyCode - KeyEvent.KEYCODE_0);
                 return true;
             }
+            // 频道上下
             if (keyCode == KeyEvent.KEYCODE_CHANNEL_UP || keyCode == KeyEvent.KEYCODE_DPAD_UP) {
                 if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
                     return super.dispatchKeyEvent(event);
@@ -963,6 +1175,7 @@ public class LivePlayActivity extends BaseActivity {
                 playPrevious();
                 return true;
             }
+            // 左右切换源
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
                 if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
                     return super.dispatchKeyEvent(event);
@@ -985,6 +1198,7 @@ public class LivePlayActivity extends BaseActivity {
                 playNextSource();
                 return true;
             }
+            // 确认键显示频道列表
             if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
                 if (tvLeftChannelListLayout != null && tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
                     return super.dispatchKeyEvent(event);
@@ -992,11 +1206,25 @@ public class LivePlayActivity extends BaseActivity {
                 showChannelList();
                 return true;
             }
+            // 菜单键：显示快捷菜单（酷9风格）
             if (keyCode == KeyEvent.KEYCODE_MENU) {
-                showSettingGroup();
+                showShortcutsMenu();
                 return true;
             }
+            // 搜索键（通常为 KEYCODE_SEARCH 或自定义）
+            if (keyCode == KeyEvent.KEYCODE_SEARCH) {
+                showSearchDialog();
+                return true;
+            }
+            // 音轨切换键（可自定义，此处用 KEYCODE_MEDIA_AUDIO_TRACK 或 F1-F4）
+            if (keyCode == KeyEvent.KEYCODE_MEDIA_AUDIO_TRACK || keyCode == KeyEvent.KEYCODE_F1) {
+                showTrackDialog();
+                return true;
+            }
+            // 原有设置菜单（按 MENU 已改为快捷菜单，如需保留原设置组可另设按键）
+            // 如果仍想用 MENU 显示设置组，可在此处判断，但建议区分
             if (keyCode == KeyEvent.KEYCODE_BACK) {
+                // 处理返回键逻辑（与您的原有逻辑一致）
                 if (tvRightSettingLayout != null && tvRightSettingLayout.getVisibility() == View.VISIBLE) {
                     mHandler.removeCallbacks(mHideSettingLayoutRun);
                     tvRightSettingLayout.setVisibility(View.INVISIBLE);
@@ -1014,6 +1242,7 @@ public class LivePlayActivity extends BaseActivity {
         return super.dispatchKeyEvent(event);
     }
 
+    // ========== 以下为原有方法，完整保留 ==========
     private void numericKeyDown(int digit) {
         selectedChannelNumber = selectedChannelNumber * 10 + digit;
         if (selectedChannelNumber > 9999) selectedChannelNumber = digit;
@@ -1651,12 +1880,12 @@ public class LivePlayActivity extends BaseActivity {
 
     private String fetchContent(String url) {
         try {
-            okhttp3.OkHttpClient client = new okhttp3.OkHttpClient.Builder()
-                .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
                 .build();
-            okhttp3.Request request = new okhttp3.Request.Builder().url(url).build();
-            okhttp3.Response response = client.newCall(request).execute();
+            Request request = new Request.Builder().url(url).build();
+            Response response = client.newCall(request).execute();
             if (response.isSuccessful() && response.body() != null) {
                 return response.body().string();
             }
@@ -1682,31 +1911,18 @@ public class LivePlayActivity extends BaseActivity {
         });
     }
 
-    private void initShortcutsMenuView() {
-        // TODO: 在布局中确保有 R.id.mShortcutsMenuView
-        // mShortcutsMenuView = findViewById(R.id.mShortcutsMenuView);
-        // if (mShortcutsMenuView != null) {
-        //     mShortcutsMenuView.setHasFixedSize(true);
-        //     mShortcutsMenuView.setLayoutManager(new V7LinearLayoutManager(this, 1, false));
-        //     shortcutsMenuAdapter = new ShortcutsMenuAdapter();
-        //     mShortcutsMenuView.setAdapter(shortcutsMenuAdapter);
-        // }
-    }
-
-    private void initSearchChannelView() {
-        // TODO: 在布局中确保有 R.id.mSearchChannelView
-        // mSearchChannelView = findViewById(R.id.mSearchChannelView);
-        // if (mSearchChannelView != null) {
-        //     mSearchChannelView.setHasFixedSize(true);
-        //     mSearchChannelView.setLayoutManager(new V7LinearLayoutManager(this, 1, false));
-        //     searchChannelAdapter = new SearchChannelAdapter();
-        //     mSearchChannelView.setAdapter(searchChannelAdapter);
-        // }
-    }
-
-    private void initTrackListView() {
-        // TODO: 在布局中确保有 R.id.mTrackListView
-        // trackListAdapter = new TrackListAdapter();
+    private void applyChannelList(List<LiveChannelGroup> list) {
+        liveChannelGroupList = list;
+        if (liveChannelGroupList.isEmpty()) {
+            Toast.makeText(this, "无直播频道", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        // 自动播放第一个频道
+        if (liveChannelGroupList.size() > 0 && liveChannelGroupList.get(0).getLiveChannels().size() > 0) {
+            playChannel(0, 0, true);
+        }
+        // 更新频道列表UI
+        refreshChannelList();
     }
 
     private final Runnable mUpdateNetSpeedRun = new Runnable() {
