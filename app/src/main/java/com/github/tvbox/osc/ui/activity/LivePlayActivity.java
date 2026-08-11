@@ -120,9 +120,7 @@ import xyz.doikki.videoplayer.exo.ExoMediaSourceHelper;
 import xyz.doikki.videoplayer.player.VideoView;
 
 /**
- * @author pj567
- * @date :2021/1/12
- * @description: 完整整合酷9风格设置面板和EPG的直播播放Activity
+ * 完整直播播放器 - 整合酷9风格设置面板和EPG，内置接口配置入口
  */
 public class LivePlayActivity extends BaseActivity {
     public static Context context;
@@ -419,19 +417,21 @@ public class LivePlayActivity extends BaseActivity {
         // 初始化设置组（必须放在 initLiveChannelList 之前，因为设置组需要当前频道信息）
         initLiveSettingGroupList();
 
-        initLiveChannelList();
+        // 检查并加载直播源
+        checkAndLoadLiveSource();
 
         Hawk.put(HawkConfig.PLAYER_IS_LIVE,true);
+    }
 
-        // 检查是否设置了直播接口地址，若没有则弹出设置对话框
+    // ======================== 检查并加载直播源 ========================
+    private void checkAndLoadLiveSource() {
         String liveApi = Hawk.get(HawkConfig.LIVE_API_URL, "");
         if (TextUtils.isEmpty(liveApi)) {
-            mHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    showLiveApiDialog();
-                }
-            }, 500);
+            // 无接口地址，弹出设置对话框
+            showLiveApiDialog();
+        } else {
+            // 已有地址，尝试加载
+            initLiveChannelList();
         }
     }
 
@@ -459,7 +459,7 @@ public class LivePlayActivity extends BaseActivity {
                 Hawk.put(HawkConfig.LIVE_API_URL, url);
                 // 重新加载直播配置
                 loadLiveConfigOnEnter();
-                // 刷新设置面板中的历史记录
+                // 刷新设置面板
                 initLiveSettingGroupList();
                 Toast.makeText(LivePlayActivity.this, "已保存，正在加载...", Toast.LENGTH_SHORT).show();
             }
@@ -468,7 +468,14 @@ public class LivePlayActivity extends BaseActivity {
         builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
+                // 用户取消，提示并再次弹出
                 Toast.makeText(LivePlayActivity.this, "请设置接口地址后使用", Toast.LENGTH_LONG).show();
+                mHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        showLiveApiDialog();
+                    }
+                }, 500);
             }
         });
 
@@ -2768,7 +2775,6 @@ public class LivePlayActivity extends BaseActivity {
         if (currentLiveChannelItem != null) {
             for (int i = 0; i < currentLiveChannelItem.getSourceNum(); i++) {
                 LiveSettingItem item = new LiveSettingItem();
-                // 修复类型转换问题
                 Object nameObj = currentLiveChannelItem.getChannelSourceNames().get(i);
                 item.setItemName(nameObj == null ? "" : nameObj.toString());
                 item.setItemIndex(i);
@@ -2792,7 +2798,7 @@ public class LivePlayActivity extends BaseActivity {
         scaleGroup.setGroupName("画面比例");
         ArrayList<LiveSettingItem> scaleItems = new ArrayList<>();
         String[] scales = {"默认", "16:9", "4:3", "填充", "原始", "裁剪"};
-        int currentScale = Hawk.get("live_player_scale", 0); // 使用字符串键
+        int currentScale = Hawk.get("live_player_scale", 0);
         for (int i = 0; i < scales.length; i++) {
             LiveSettingItem item = new LiveSettingItem();
             item.setItemName(scales[i]);
@@ -2809,7 +2815,7 @@ public class LivePlayActivity extends BaseActivity {
         decodeGroup.setGroupName("解码方式");
         ArrayList<LiveSettingItem> decodeItems = new ArrayList<>();
         String[] decodes = {"系统", "ijk硬解", "ijk软解", "exo"};
-        int currentDecode = Hawk.get("live_player_type", 0); // 使用字符串键
+        int currentDecode = Hawk.get("live_player_type", 0);
         for (int i = 0; i < decodes.length; i++) {
             LiveSettingItem item = new LiveSettingItem();
             item.setItemName(decodes[i]);
@@ -3677,5 +3683,4 @@ public class LivePlayActivity extends BaseActivity {
     private void setEmptyLiveChannelList(boolean releasePlayer) {
         clearLiveChannelList(releasePlayer);
     }
-
 }
