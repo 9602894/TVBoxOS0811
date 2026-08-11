@@ -3385,4 +3385,295 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-    private Integer[] getFirstChannel
+    private Integer[] getFirstChannelByName(String keyword) {
+        if (TextUtils.isEmpty(keyword)) return null;
+        String upperKeyword = keyword.toUpperCase(Locale.US);
+        for (LiveChannelGroup liveChannelGroup : liveChannelGroupList) {
+            if (liveChannelGroup == null || isNeedInputPassword(liveChannelGroup.getGroupIndex())) continue;
+            ArrayList<LiveChannelItem> groupChannels = liveChannelGroup.getLiveChannels();
+            if (groupChannels == null || groupChannels.isEmpty()) continue;
+            for (LiveChannelItem item : groupChannels) {
+                if (item == null || TextUtils.isEmpty(item.getChannelName())) continue;
+                if (item.getChannelName().toUpperCase(Locale.US).contains(upperKeyword)) {
+                    return new Integer[]{liveChannelGroup.getGroupIndex(), item.getChannelIndex()};
+                }
+            }
+        }
+        return null;
+    }
+
+    private Integer[] getNextChannel(int direction) {
+        int channelGroupIndex = currentChannelGroupIndex;
+        int liveChannelIndex = currentLiveChannelIndex;
+
+        if (direction > 0) {
+            liveChannelIndex++;
+            if (liveChannelIndex >= getLiveChannels(channelGroupIndex).size()) {
+                liveChannelIndex = 0;
+                if (Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false)) {
+                    do {
+                        channelGroupIndex++;
+                        if (channelGroupIndex >= liveChannelGroupList.size())
+                            channelGroupIndex = 0;
+                    } while (!liveChannelGroupList.get(channelGroupIndex).getGroupPassword().isEmpty() || channelGroupIndex == currentChannelGroupIndex);
+                }
+            }
+        } else {
+            liveChannelIndex--;
+            if (liveChannelIndex < 0) {
+                if (Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false)) {
+                    do {
+                        channelGroupIndex--;
+                        if (channelGroupIndex < 0)
+                            channelGroupIndex = liveChannelGroupList.size() - 1;
+                    } while (!liveChannelGroupList.get(channelGroupIndex).getGroupPassword().isEmpty() || channelGroupIndex == currentChannelGroupIndex);
+                }
+                liveChannelIndex = getLiveChannels(channelGroupIndex).size() - 1;
+            }
+        }
+
+        Integer[] groupChannelIndex = new Integer[2];
+        groupChannelIndex[0] = channelGroupIndex;
+        groupChannelIndex[1] = liveChannelIndex;
+
+        return groupChannelIndex;
+    }
+
+    private int getFirstNoPasswordChannelGroup() {
+        for (LiveChannelGroup liveChannelGroup : liveChannelGroupList) {
+            if (liveChannelGroup.getGroupPassword().isEmpty())
+                return liveChannelGroup.getGroupIndex();
+        }
+        return -1;
+    }
+
+    private boolean isCurrentLiveChannelValid() {
+        if (currentLiveChannelItem == null) {
+            Toast.makeText(App.getInstance(), "请先选择频道", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        return true;
+    }
+
+    //计算两个时间相差的秒数
+    public static long getTime(String startTime, String endTime)  {
+        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        long eTime = 0;
+        try {
+            eTime = df.parse(endTime).getTime();
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        long sTime = 0;
+        try {
+            sTime = df.parse(startTime).getTime();
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+        long diff = (eTime - sTime) / 1000;
+        return diff;
+    }
+    private  String durationToString(int duration) {
+        if (duration < 0) {
+            duration = 0;
+        }
+        String result = "";
+        int dur = duration / 1000;
+        int hour=dur/3600;
+        int min = (dur / 60) % 60;
+        int sec = dur % 60;
+        if(hour>0){
+            if (min > 9) {
+                if (sec > 9) {
+                    result =hour+":"+ min + ":" + sec;
+                } else {
+                    result =hour+":"+ min + ":0" + sec;
+                }
+            } else {
+                if (sec > 9) {
+                    result =hour+":"+ "0" + min + ":" + sec;
+                } else {
+                    result = hour+":"+"0" + min + ":0" + sec;
+                }
+            }
+        }else{
+            if (min > 9) {
+                if (sec > 9) {
+                    result = min + ":" + sec;
+                } else {
+                    result = min + ":0" + sec;
+                }
+            } else {
+                if (sec > 9) {
+                    result ="0" + min + ":" + sec;
+                } else {
+                    result = "0" + min + ":0" + sec;
+                }
+            }
+        }
+        return result;
+    }
+    public void showProgressBars( boolean show){
+
+        sBar.requestFocus();
+        if(show){
+            ll_right_top_huikan.setVisibility(View.VISIBLE);
+            backcontroller.setVisibility(View.VISIBLE);
+            ll_epg.setVisibility(View.GONE);
+        }else{
+            backcontroller.setVisibility(View.GONE);
+            ll_right_top_huikan.setVisibility(View.GONE);
+            if(!tip_epg1.getText().equals("暂无信息")){
+                ll_epg.setVisibility(View.VISIBLE);
+            }
+        }
+
+        iv_play.setOnClickListener(new View.OnClickListener() {
+
+            @Override
+            public void onClick(View arg0) {
+                mVideoView.start();
+                iv_play.setVisibility(View.INVISIBLE);
+                countDownTimer.start();
+                iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.vod_pause));
+            }
+        });
+
+        iv_playpause.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View arg0) {
+                if(mVideoView.isPlaying()){
+                    mVideoView.pause();
+                    countDownTimer.cancel();
+                    iv_play.setVisibility(View.VISIBLE);
+                    iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.icon_play));
+                }else{
+                    mVideoView.start();
+                    iv_play.setVisibility(View.INVISIBLE);
+                    countDownTimer.start();
+                    iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.vod_pause));
+                }
+            }
+        });
+        sBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+
+
+            @Override
+            public void onStopTrackingTouch(SeekBar arg0) {
+
+            }
+
+            @Override
+            public void onStartTrackingTouch(SeekBar arg0) {
+
+            }
+
+            @Override
+            public void onProgressChanged(SeekBar sb, int progress, boolean fromuser) {
+                if(fromuser){
+                    if(countDownTimer!=null){
+                        mVideoView.seekTo(progress);
+                        countDownTimer.cancel();
+                        countDownTimer.start();
+                    }
+                }
+            }
+        });
+        sBar.setOnKeyListener(new View.OnKeyListener() {
+            @Override
+            public boolean onKey(View arg0, int keycode, KeyEvent event) {
+                if(event.getAction()==KeyEvent.ACTION_DOWN){
+                    if(keycode==KeyEvent.KEYCODE_DPAD_CENTER||keycode==KeyEvent.KEYCODE_ENTER){
+                        if(mVideoView.isPlaying()){
+                            mVideoView.pause();
+                            countDownTimer.cancel();
+                            iv_play.setVisibility(View.VISIBLE);
+                            iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.icon_play));
+                        }else{
+                            mVideoView.start();
+                            iv_play.setVisibility(View.INVISIBLE);
+                            countDownTimer.start();
+                            iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.vod_pause));
+                        }
+                    }
+                }
+                return false;
+            }
+        });
+        if(mVideoView.isPlaying()){
+            iv_play.setVisibility(View.INVISIBLE);
+            iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.vod_pause));
+        }else{
+            iv_play.setVisibility(View.VISIBLE);
+            iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.icon_play));
+        }
+        if(countDownTimer3==null){
+            countDownTimer3 = new CountDownTimer(postTimeout, 1000) {
+
+                @Override
+                public void onTick(long arg0) {
+
+                    if(mVideoView != null){
+                        sBar.setProgress(safeTimeMs(mVideoView.getCurrentPosition()));
+                        tv_currentpos.setText(durationToString(safeTimeMs(mVideoView.getCurrentPosition())));
+                    }
+
+                }
+
+                @Override
+                public void onFinish() {
+                    if(backcontroller.getVisibility() == View.VISIBLE){
+                        backcontroller.setVisibility(View.GONE);
+                    }
+                }
+            };
+        }else{
+            countDownTimer3.cancel();
+        }
+        countDownTimer3.start();
+    }
+
+    /**
+     * 当播放列表为空或加载失败时，设置一个默认的播放列表，保证播放界面不会崩溃
+     */
+    private void clearLiveChannelList() {
+        clearLiveChannelList(true);
+    }
+
+    private void clearLiveChannelList(boolean releasePlayer) {
+        refreshingLiveChannelList = false;
+        pendingLiveRefreshChannelName = null;
+        pendingLiveRefreshSourceIndex = -1;
+        currentLiveChannelItem = null;
+        currentLiveChannelIndex = -1;
+        currentLiveLookBackIndex = -1;
+        currentLiveChangeSourceTimes = 0;
+        liveChannelGroupList.clear();
+        ApiConfig.get().getChannelGroupList().clear();
+        mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
+        mHandler.removeCallbacks(mLoadEpgRun);
+        hideSwitchChannelSnapshot();
+        if (releasePlayer && mVideoView != null) mVideoView.release();
+        showSuccess();
+        if (liveChannelGroupAdapter != null) {
+            liveChannelGroupAdapter.clearGroupState();
+            liveChannelGroupAdapter.setNewData(new ArrayList<LiveChannelGroup>());
+        }
+        if (liveChannelItemAdapter != null) {
+            liveChannelItemAdapter.setFocusedChannelIndex(-1);
+            liveChannelItemAdapter.setSelectedChannelIndex(-1);
+            liveChannelItemAdapter.setNewData(new ArrayList<LiveChannelItem>());
+        }
+        if (tvLeftChannelListLayout != null) tvLeftChannelListLayout.setVisibility(View.INVISIBLE);
+        if (tvRightSettingLayout != null) tvRightSettingLayout.setVisibility(View.INVISIBLE);
+    }
+
+    private void setEmptyLiveChannelList() {
+        setEmptyLiveChannelList(true);
+    }
+
+    private void setEmptyLiveChannelList(boolean releasePlayer) {
+        clearLiveChannelList(releasePlayer);
+    }
+
+}
