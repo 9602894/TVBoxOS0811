@@ -2,23 +2,26 @@ package com.github.tvbox.osc.ui.activity;
 
 import static xyz.doikki.videoplayer.util.PlayerUtils.safeTimeMs;
 
-import android.Manifest;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.IntEvaluator;
 import android.animation.ObjectAnimator;
 import android.annotation.SuppressLint;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.CountDownTimer;
 import android.os.Handler;
 import android.text.TextUtils;
 import android.util.Base64;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -119,7 +122,7 @@ import xyz.doikki.videoplayer.player.VideoView;
 /**
  * @author pj567
  * @date :2021/1/12
- * @description:
+ * @description: 完整整合酷9风格设置面板和EPG的直播播放Activity
  */
 public class LivePlayActivity extends BaseActivity {
     public static Context context;
@@ -182,7 +185,6 @@ public class LivePlayActivity extends BaseActivity {
     private static LiveChannelItem  channel_Name = null;
     private static Hashtable<String, ArrayList<Epginfo>> hsEpg = new Hashtable<>();
     private CountDownTimer countDownTimer;
-//    private CountDownTimer countDownTimerRightTop;
     private View ll_right_top_loading;
     private View ll_right_top_huikan;
     private View divLoadEpg;
@@ -198,12 +200,9 @@ public class LivePlayActivity extends BaseActivity {
     TextView tv_curepg_left;
     TextView tv_nextepg_left;
     private MyEpgAdapter myAdapter;
-    private TextView tv_right_top_tipnetspeed;
     private TextView tv_right_top_channel_name;
     private TextView tv_right_top_epg_name;
-    private TextView tv_right_top_type;
     private ImageView iv_circle_bg;
-    private TextView tv_shownum ;
     private TextView txtNoEpg ;
     private ImageView iv_back_bg;
 
@@ -216,7 +215,6 @@ public class LivePlayActivity extends BaseActivity {
     private LiveEpgAdapter epgListAdapter;
 
     private List<LiveDayListGroup> liveDayList = new ArrayList<>();
-
 
     //laodao 7day replay
     public static SimpleDateFormat formatDate = new SimpleDateFormat("yyyy-MM-dd");
@@ -248,7 +246,6 @@ public class LivePlayActivity extends BaseActivity {
     // 遥控器数字键输入的要切换的频道号码
     private int selectedChannelNumber = 0;
     private TextView tvSelectedChannel;
-
 
     @Override
     protected int getLayoutResID() {
@@ -285,13 +282,10 @@ public class LivePlayActivity extends BaseActivity {
         tv_curepg_left = (TextView) findViewById(R.id.tv_current_program);//当前节目
         tv_nextepg_left= (TextView) findViewById(R.id.tv_next_program);//下一节目
         ll_epg = (RelativeLayout) findViewById(R.id.ll_epg);
-//        tv_right_top_tipnetspeed = (TextView)findViewById(R.id.tv_right_top_tipnetspeed);
         tv_right_top_channel_name = (TextView)findViewById(R.id.tv_right_top_channel_name);
         tv_right_top_epg_name = (TextView)findViewById(R.id.tv_right_top_epg_name);
-//        tv_right_top_type = (TextView)findViewById(R.id.tv_right_top_type);
         iv_circle_bg = (ImageView) findViewById(R.id.iv_circle_bg);
         iv_back_bg = (ImageView) findViewById(R.id.iv_back_bg);
-        tv_shownum = (TextView) findViewById(R.id.tv_shownum);
         txtNoEpg = (TextView) findViewById(R.id.txtNoEpg);
         ll_right_top_loading = findViewById(R.id.ll_right_top_loading);
         ll_right_top_huikan = findViewById(R.id.ll_right_top_huikan);
@@ -337,7 +331,6 @@ public class LivePlayActivity extends BaseActivity {
             backcontroller.setVisibility(View.GONE);
             ll_epg.setVisibility(View.VISIBLE);
         }
-
 
         iv_play.setOnClickListener(new View.OnClickListener() {
 
@@ -422,11 +415,69 @@ public class LivePlayActivity extends BaseActivity {
         initLiveChannelView();
         initSettingGroupView();
         initSettingItemView();
-        initLiveChannelList();
+
+        // 初始化设置组（必须放在 initLiveChannelList 之前，因为设置组需要当前频道信息）
         initLiveSettingGroupList();
+
+        initLiveChannelList();
+
         Hawk.put(HawkConfig.PLAYER_IS_LIVE,true);
+
+        // 检查是否设置了直播接口地址，若没有则弹出设置对话框
+        String liveApi = Hawk.get(HawkConfig.LIVE_API_URL, "");
+        if (TextUtils.isEmpty(liveApi)) {
+            mHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    showLiveApiDialog();
+                }
+            }, 500);
+        }
     }
-    //获取EPG并存储 // 百川epg  DIYP epg   51zmt epg ------- 自建EPG格式输出格式请参考 51zmt
+
+    // ======================== 接口地址设置对话框 ========================
+    private void showLiveApiDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("设置直播接口地址");
+
+        final EditText input = new EditText(this);
+        input.setHint("请输入直播接口地址，如 http://xxx.com/live.txt");
+        String savedUrl = Hawk.get(HawkConfig.LIVE_API_URL, "");
+        if (!TextUtils.isEmpty(savedUrl)) {
+            input.setText(savedUrl);
+        }
+        builder.setView(input);
+
+        builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                String url = input.getText().toString().trim();
+                if (TextUtils.isEmpty(url)) {
+                    Toast.makeText(LivePlayActivity.this, "地址不能为空", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                Hawk.put(HawkConfig.LIVE_API_URL, url);
+                // 重新加载直播配置
+                loadLiveConfigOnEnter();
+                // 刷新设置面板中的历史记录
+                initLiveSettingGroupList();
+                Toast.makeText(LivePlayActivity.this, "已保存，正在加载...", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                Toast.makeText(LivePlayActivity.this, "请设置接口地址后使用", Toast.LENGTH_LONG).show();
+            }
+        });
+
+        builder.setCancelable(false);
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    // ======================== EPG 相关方法 ========================
     private List<Epginfo> epgdata = new ArrayList<>();
 
     private void showEpg(Date date, ArrayList<Epginfo> arrayList) {
@@ -499,23 +550,23 @@ public class LivePlayActivity extends BaseActivity {
 
     private void updateEpgPanelState(boolean hasEpg) {
         if (hasEpg) {
-            txtNoEpg.setVisibility(View.GONE);
-            mRightEpgList.setVisibility(View.VISIBLE);
-            divLoadEpgDivider.setVisibility(View.VISIBLE);
-            if (divEpg.getVisibility() != View.VISIBLE) {
-                divLoadEpg.setVisibility(View.VISIBLE);
-                divLoadEpgleft.setVisibility(View.GONE);
+            if (txtNoEpg != null) txtNoEpg.setVisibility(View.GONE);
+            if (mRightEpgList != null) mRightEpgList.setVisibility(View.VISIBLE);
+            if (divLoadEpgDivider != null) divLoadEpgDivider.setVisibility(View.VISIBLE);
+            if (divEpg != null && divEpg.getVisibility() != View.VISIBLE) {
+                if (divLoadEpg != null) divLoadEpg.setVisibility(View.VISIBLE);
+                if (divLoadEpgleft != null) divLoadEpgleft.setVisibility(View.GONE);
             }
         } else {
             epgdata = new ArrayList<>();
-            epgListAdapter.setNewData(epgdata);
-            txtNoEpg.setVisibility(View.GONE);
-            mRightEpgList.setVisibility(View.GONE);
-            divEpg.setVisibility(View.GONE);
-            divLoadEpg.setVisibility(View.GONE);
-            divLoadEpgDivider.setVisibility(View.GONE);
-            divLoadEpgleft.setVisibility(View.GONE);
-            mChannelGroupView.setVisibility(View.VISIBLE);
+            if (epgListAdapter != null) epgListAdapter.setNewData(epgdata);
+            if (txtNoEpg != null) txtNoEpg.setVisibility(View.GONE);
+            if (mRightEpgList != null) mRightEpgList.setVisibility(View.GONE);
+            if (divEpg != null) divEpg.setVisibility(View.GONE);
+            if (divLoadEpg != null) divLoadEpg.setVisibility(View.GONE);
+            if (divLoadEpgDivider != null) divLoadEpgDivider.setVisibility(View.GONE);
+            if (divLoadEpgleft != null) divLoadEpgleft.setVisibility(View.GONE);
+            if (mChannelGroupView != null) mChannelGroupView.setVisibility(View.VISIBLE);
         }
     }
 
@@ -532,6 +583,7 @@ public class LivePlayActivity extends BaseActivity {
     }
 
     public void getEpg(Date date) {
+        if (channel_Name == null) return;
         String channelName = channel_Name.getChannelName();
         String channelNameReal = normalizeEpgChannelName(getFirstPartBeforeSpace(channelName));
         @SuppressLint("SimpleDateFormat") SimpleDateFormat timeFormat = new SimpleDateFormat("yyyy-MM-dd");
@@ -550,7 +602,9 @@ public class LivePlayActivity extends BaseActivity {
             updateChannelIcon(channelName, logo);
         }
         final String finalEpgTagName = epgTagName;
-        epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
+        if (epgListAdapter != null && currentLiveChannelItem != null) {
+            epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
+        }
         if (!hasEpgAddress()) {
             updateEpgPanelState(false);
             return;
@@ -672,8 +726,6 @@ public class LivePlayActivity extends BaseActivity {
             return;
         }
         updateEpgPanelState(false);
-//        showEpg(date, new ArrayList<>());
-//        showBottomEpg();
     }
 
     private void onEpgRequestResponse(String paramString, Date date, String channelNameReal, String finalEpgTagName,
@@ -737,7 +789,6 @@ public class LivePlayActivity extends BaseActivity {
         return savedEpgKey.equals(currentEpgKey);
     }
 
-    //显示底部EPG
     private boolean isXmlEpgAddress(String address) {
         if (address == null) {
             return false;
@@ -987,6 +1038,7 @@ public class LivePlayActivity extends BaseActivity {
         if (isSHIYI){
             return;
         }
+        if (channel_Name == null) return;
         if (channel_Name.getChannelName() != null) {
             tip_chname.setText(channel_Name.getChannelName());
             tv_channelnum.setText("" + channel_Name.getChannelNum());
@@ -1019,8 +1071,10 @@ public class LivePlayActivity extends BaseActivity {
                         }
                     }
                 }
-                epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
-                epgListAdapter.setNewData(arrayList);
+                if (epgListAdapter != null) {
+                    epgListAdapter.CanBack(currentLiveChannelItem.getinclude_back());
+                    epgListAdapter.setNewData(arrayList);
+                }
                 updateEpgPanelState(arrayList != null && arrayList.size() > 0);
             } else {
                 updateEpgPanelState(false);
@@ -1032,7 +1086,7 @@ public class LivePlayActivity extends BaseActivity {
             if(!tip_epg1.getText().equals("暂无信息")){
                 ll_right_top_loading.setVisibility(View.VISIBLE);
                 ll_epg.setVisibility(View.VISIBLE);
-                countDownTimer = new CountDownTimer(postTimeout, 1000) {//底部epg隐藏时间设定
+                countDownTimer = new CountDownTimer(postTimeout, 1000) {
                     public void onTick(long j) {
                     }
                     public void onFinish() {
@@ -1121,11 +1175,10 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-
     //频道列表
     @SuppressLint("NotifyDataSetChanged")
     public  void divLoadEpgRight(View view) {
-        if (epgListAdapter.getData() == null || epgListAdapter.getData().isEmpty()) {
+        if (epgListAdapter == null || epgListAdapter.getData() == null || epgListAdapter.getData().isEmpty()) {
             updateEpgPanelState(false);
             return;
         }
@@ -1145,7 +1198,7 @@ public class LivePlayActivity extends BaseActivity {
             }
         });
     }
-    //频道列表
+
     public  void divLoadEpgLeft(View view) {
         mHandler.removeCallbacks(mHideChannelListRun);
         mHandler.postDelayed(mHideChannelListRun, postTimeout);
@@ -1156,7 +1209,6 @@ public class LivePlayActivity extends BaseActivity {
         focusCurrentChannelInMenu();
     }
 
-
     @Override
     public void onBackPressed() {
         if (tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
@@ -1165,7 +1217,7 @@ public class LivePlayActivity extends BaseActivity {
         } else if (tvRightSettingLayout.getVisibility() == View.VISIBLE) {
             mHandler.removeCallbacks(mHideSettingLayoutRun);
             mHandler.post(mHideSettingLayoutRun);
-        } else if( backcontroller.getVisibility() == View.VISIBLE){ //
+        } else if( backcontroller.getVisibility() == View.VISIBLE){
             backcontroller.setVisibility(View.GONE);
         }else if(isBack){
             isBack= false;
@@ -1189,7 +1241,7 @@ public class LivePlayActivity extends BaseActivity {
             for (LiveChannelGroup group : liveChannelGroupList) {
                 int groupChannelCount = group.getLiveChannels().size();
                 if (currentTotal + groupChannelCount >= channelNumber) {
-                    channelIndex = channelNumber - currentTotal - 1; // 转换为0-based索引
+                    channelIndex = channelNumber - currentTotal - 1;
                     break;
                 }
                 currentTotal += groupChannelCount;
@@ -1303,7 +1355,7 @@ public class LivePlayActivity extends BaseActivity {
             mLongPressRunnable = new Runnable() {
                 @Override
                 public void run() {
-                    showSettingGroup(); //实现长按调出菜单
+                    showSettingGroup();
                 }
             };
             mmHandler.postDelayed(mLongPressRunnable, LONG_PRESS_DELAY);
@@ -1330,7 +1382,6 @@ public class LivePlayActivity extends BaseActivity {
             mVideoView.resume();
         }
     }
-
 
     @Override
     protected void onPause() {
@@ -1386,10 +1437,9 @@ public class LivePlayActivity extends BaseActivity {
 
     private void refreshChannelList(int currentChannelGroupIndex) {
         List<LiveChannelItem> newChannels = getLiveChannels(currentChannelGroupIndex);
-        // 2. 判断数据是否变化
         if (currentChannelGroupIndex == mLastChannelGroupIndex
                 && isSameData(newChannels, mLastChannelList)) {
-            return; // 数据未变化，跳过刷新 解决部分直播频道过多时卡顿
+            return;
         }
         if (currentLiveChannelIndex > -1){
             mLiveChannelView.scrollToPosition(currentLiveChannelIndex);
@@ -1402,9 +1452,7 @@ public class LivePlayActivity extends BaseActivity {
         liveChannelItemAdapter.setNewData(newChannels);
     }
 
-    // 对比两个列表内容是否相同
     private boolean isSameData(List<LiveChannelItem> list1, List<LiveChannelItem> list2) {
-//        return list1.size() == list2.size();
         if (list1 == list2) return true;
         if (list1 == null || list2 == null || list1.size() != list2.size()) return false;
         for (int i = 0; i < list1.size(); i++) {
@@ -1618,7 +1666,6 @@ public class LivePlayActivity extends BaseActivity {
 
             }else if(livesOBJ.has("api")){
                 py_jar=livesOBJ.has("api")?livesOBJ.get("api").getAsString():"";
-//                String ext = livesOBJ.has("ext")?livesOBJ.get("ext").getAsJsonObject().toString():"";
                 String ext="";
                 if(livesOBJ.has("ext") && (livesOBJ.get("ext").isJsonObject() || livesOBJ.get("ext").isJsonArray())){
                     ext=livesOBJ.get("ext").toString();
@@ -1792,7 +1839,6 @@ public class LivePlayActivity extends BaseActivity {
     private boolean playChannel(int channelGroupIndex, int liveChannelIndex, boolean changeSource) {
         if ((channelGroupIndex == currentChannelGroupIndex && liveChannelIndex == currentLiveChannelIndex && !changeSource)
                 || (changeSource && currentLiveChannelItem.getSourceNum() == 1)) {
-           // showChannelInfo();
             return true;
         }
         ArrayList<LiveChannelItem> groupChannels = getLiveChannels(channelGroupIndex);
@@ -1887,7 +1933,7 @@ public class LivePlayActivity extends BaseActivity {
         playChannel(currentChannelGroupIndex, currentLiveChannelIndex, true);
     }
 
-    //显示设置列表
+    // ======================== 设置面板（酷9风格） ========================
     private void showSettingGroup() {
         if (tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
             mHandler.removeCallbacks(mHideChannelListRun);
@@ -2032,7 +2078,6 @@ public class LivePlayActivity extends BaseActivity {
                     mHandler.postDelayed(mHideChannelListRun, 100);
                     mVideoView.release();
                     isSHIYI = true;
-                    //mCanSeek=true;
                     shiyiUrl = buildCatchupUrl(shiyiUrl, selectedData);
                     if (TextUtils.isEmpty(shiyiUrl)) return;
                     LOG.i("echo-回看地址playUrl :"+ shiyiUrl);
@@ -2099,7 +2144,6 @@ public class LivePlayActivity extends BaseActivity {
                     mHandler.postDelayed(mHideChannelListRun, 100);
                     mVideoView.release();
                     isSHIYI = true;
-                    //mCanSeek=true;
                     shiyiUrl = buildCatchupUrl(shiyiUrl, selectedData);
                     if (TextUtils.isEmpty(shiyiUrl)) return;
                     LOG.i("echo-回看地址playUrl :"+ shiyiUrl);
@@ -2123,7 +2167,6 @@ public class LivePlayActivity extends BaseActivity {
                     sBar = (SeekBar) findViewById(R.id.pb_progressbar);
                     sBar.setMax(safeTimeMs((long) shiyi_time_c * 1000));
                     sBar.setProgress(safeTimeMs(mVideoView.getCurrentPosition()));
-                   // long dd = mVideoView.getDuration();
                     tv_currentpos.setText(durationToString(safeTimeMs(mVideoView.getCurrentPosition())));
                     tv_duration.setText(durationToString(safeTimeMs((long) shiyi_time_c * 1000)));
                     showProgressBars(true);
@@ -2132,20 +2175,9 @@ public class LivePlayActivity extends BaseActivity {
             }
         });
     }
-    //laoda 生成7天回放日期列表数据
+
     private void initDayList() {
         liveDayList.clear();
-//        Date firstday = new Date(nowday.getTime() - 2 * 24 * 60 * 60 * 1000);
-//        for (int i = 0; i < 1; i++) {
-//            LiveDayListGroup daylist = new LiveDayListGroup();
-//            Date newday= new Date(firstday.getTime() + i * 24 * 60 * 60 * 1000);
-//            String day = formatDate1.format(newday);
-//            LOG.i("echo-date"+day);
-//            daylist.setGroupIndex(i);
-//            daylist.setGroupName(day);
-//            liveDayList.add(daylist);
-//        }
-
         LiveDayListGroup daylist = new LiveDayListGroup();
         Date newday= new Date((nowday.getTime()));
         String day = formatDate1.format(newday);
@@ -2154,9 +2186,8 @@ public class LivePlayActivity extends BaseActivity {
         daylist.setGroupName(day);
         liveDayList.add(daylist);
     }
-    //kens 7天回放数据绑定和展示
+
     private void initEpgDateView() {
-//        return;
         mEpgDateGridView.setHasFixedSize(true);
         mEpgDateGridView.setLayoutManager(new V7LinearLayoutManager(this.mContext, 1, false));
         liveEpgDateAdapter = new LiveEpgDateAdapter();
@@ -2171,7 +2202,6 @@ public class LivePlayActivity extends BaseActivity {
             epgDate.setDatePresented(datePresentFormat.format(dateIns));
             epgDate.setDateParamVal(dateIns);
             liveEpgDateAdapter.addData(epgDate);
-//            calendar.add(Calendar.DAY_OF_MONTH, -1);
         }
         mEpgDateGridView.setAdapter(liveEpgDateAdapter);
         mEpgDateGridView.addOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -2182,46 +2212,9 @@ public class LivePlayActivity extends BaseActivity {
                 mHandler.postDelayed(mHideChannelListRun, postTimeout);
             }
         });
-
-//        //电视
-//        mEpgDateGridView.setOnItemListener(new TvRecyclerView.OnItemListener() {
-//            @Override
-//            public void onItemPreSelected(TvRecyclerView parent, View itemView, int position) {
-//                liveEpgDateAdapter.setFocusedIndex(-1);
-//            }
-//
-//            @Override
-//            public void onItemSelected(TvRecyclerView parent, View itemView, int position) {
-//                mHandler.removeCallbacks(mHideChannelListRun);
-//                mHandler.postDelayed(mHideChannelListRun, postTimeout);
-//                liveEpgDateAdapter.setFocusedIndex(position);
-//            }
-//
-//            @Override
-//            public void onItemClick(TvRecyclerView parent, View itemView, int position) {
-//                mHandler.removeCallbacks(mHideChannelListRun);
-//                mHandler.postDelayed(mHideChannelListRun, postTimeout);
-//                liveEpgDateAdapter.setSelectedIndex(position);
-//                getEpg(liveEpgDateAdapter.getData().get(position).getDateParamVal());
-//            }
-//        });
-//
-//        //手机/模拟器
-//        liveEpgDateAdapter.setOnItemClickListener(new BaseQuickAdapter.OnItemClickListener() {
-//            @Override
-//            public void onItemClick(BaseQuickAdapter adapter, View view, int position) {
-//                FastClickCheckUtil.check(view);
-//                mHandler.removeCallbacks(mHideChannelListRun);
-//                mHandler.postDelayed(mHideChannelListRun, postTimeout);
-//                liveEpgDateAdapter.setSelectedIndex(position);
-//                getEpg(liveEpgDateAdapter.getData().get(position).getDateParamVal());
-//            }
-//        });
         liveEpgDateAdapter.setSelectedIndex(0);
         mEpgDateGridView.setVisibility(View.GONE);
     }
-
-
 
     private void initVideoView() {
         LiveController controller = new LiveController(this);
@@ -2234,7 +2227,7 @@ public class LivePlayActivity extends BaseActivity {
 
             @Override
             public void longPress() {
-                if(isBack){  //手机换源和显示时移控制栏
+                if(isBack){
                     showProgressBars(true);
                 }else{
                     showSettingGroup();
@@ -2246,15 +2239,11 @@ public class LivePlayActivity extends BaseActivity {
                 mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
                 switch (playState) {
                     case VideoView.STATE_IDLE:
-                        // 空闲状态：播放器处于空闲，尚未开始播放。一般不需要自动换源。
                     case VideoView.STATE_PAUSED:
-                        // 暂停状态：播放被暂停，通常是用户操作，不触发自动换源
                         break;
                     case VideoView.STATE_PREPARED:
-                        // 准备就绪：播放器已经加载好媒体数据，但尚未开始播放。
                     case VideoView.STATE_BUFFERED:
                     case VideoView.STATE_PLAYING:
-                        // 播放状态：当播放器缓冲完成或正在正常播放时，表明当前源是可用的，
                         hideSwitchChannelSnapshot();
                         if (resolutionInfoPending) {
                             resolutionInfoRetryCount = 0;
@@ -2266,14 +2255,11 @@ public class LivePlayActivity extends BaseActivity {
                         break;
                     case VideoView.STATE_ERROR:
                     case VideoView.STATE_PLAYBACK_COMPLETED:
-                        // 错误或播放结束状态：播放器遇到错误或播放完毕时，
-                        // 启动自动换源任务，等待3秒后尝试切换至备选源
                         hideSwitchChannelSnapshot();
                         mHandler.postDelayed(mConnectTimeoutChangeSourceRun, 3500);
                         break;
                     case VideoView.STATE_PREPARING:
                     case VideoView.STATE_BUFFERING:
-                        // 正在准备或缓冲状态：表示当前源正在加载中
                         mHandler.postDelayed(mConnectTimeoutChangeSourceRun, (Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 1) + 1) * 5000L);
                         break;
                     default:
@@ -2285,7 +2271,7 @@ public class LivePlayActivity extends BaseActivity {
             @Override
             public void changeSource(int direction) {
                 if (direction > 0)
-                    if(isBack){  //手机换源和显示时移控制栏
+                    if(isBack){
                         showProgressBars(true);
                     }else{
                         playNextSource();
@@ -2312,7 +2298,6 @@ public class LivePlayActivity extends BaseActivity {
             allowLiveSwitchPlayer = false;
             return false;
         }
-//        LOG.i("echo-liveAutoRetry switch player and replay current stream");
         allowLiveSwitchPlayer = false;
         String retryUrl = isSHIYI && !TextUtils.isEmpty(playUrl) ? playUrl : currentLiveChannelItem.getUrl();
         mVideoView.setUrl(retryUrl, liveChannelHeader());
@@ -2654,7 +2639,6 @@ public class LivePlayActivity extends BaseActivity {
                 liveSettingItemAdapter.selectItem(position, select, false);
                 break;
             case 5://多源切换
-                //TODO
                 if(position==ApiConfig.getLiveGroupIndex())break;
                 String currentChannelName = getPreferredLiveRefreshChannelName();
                 int currentSourceIndex = getPreferredLiveRefreshSourceIndex();
@@ -2772,6 +2756,158 @@ public class LivePlayActivity extends BaseActivity {
         return idx >= 0 ? idx : -1;
     }
 
+    // ======================== 设置组初始化（酷9风格硬编码） ========================
+    private void initLiveSettingGroupList() {
+        liveSettingGroupList.clear();
+
+        // 1. 线路切换
+        LiveSettingGroup sourceGroup = new LiveSettingGroup();
+        sourceGroup.setGroupIndex(0);
+        sourceGroup.setGroupName("线路切换");
+        ArrayList<LiveSettingItem> sourceItems = new ArrayList<>();
+        if (currentLiveChannelItem != null) {
+            for (int i = 0; i < currentLiveChannelItem.getSourceNum(); i++) {
+                LiveSettingItem item = new LiveSettingItem();
+                item.setItemName(currentLiveChannelItem.getChannelSourceNames().get(i));
+                item.setItemIndex(i);
+                if (i == currentLiveChannelItem.getSourceIndex()) {
+                    item.setItemSelected(true);
+                }
+                sourceItems.add(item);
+            }
+        } else {
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName("无线路");
+            item.setItemIndex(0);
+            sourceItems.add(item);
+        }
+        sourceGroup.setLiveSettingItems(sourceItems);
+        liveSettingGroupList.add(sourceGroup);
+
+        // 2. 画面比例
+        LiveSettingGroup scaleGroup = new LiveSettingGroup();
+        scaleGroup.setGroupIndex(1);
+        scaleGroup.setGroupName("画面比例");
+        ArrayList<LiveSettingItem> scaleItems = new ArrayList<>();
+        String[] scales = {"默认", "16:9", "4:3", "填充", "原始", "裁剪"};
+        int currentScale = Hawk.get(HawkConfig.LIVE_PLAYER_SCALE, 0);
+        for (int i = 0; i < scales.length; i++) {
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName(scales[i]);
+            item.setItemIndex(i);
+            if (i == currentScale) item.setItemSelected(true);
+            scaleItems.add(item);
+        }
+        scaleGroup.setLiveSettingItems(scaleItems);
+        liveSettingGroupList.add(scaleGroup);
+
+        // 3. 解码方式
+        LiveSettingGroup decodeGroup = new LiveSettingGroup();
+        decodeGroup.setGroupIndex(2);
+        decodeGroup.setGroupName("解码方式");
+        ArrayList<LiveSettingItem> decodeItems = new ArrayList<>();
+        String[] decodes = {"系统", "ijk硬解", "ijk软解", "exo"};
+        int currentDecode = Hawk.get(HawkConfig.LIVE_PLAYER_TYPE, 0);
+        for (int i = 0; i < decodes.length; i++) {
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName(decodes[i]);
+            item.setItemIndex(i);
+            if (i == currentDecode) item.setItemSelected(true);
+            decodeItems.add(item);
+        }
+        decodeGroup.setLiveSettingItems(decodeItems);
+        liveSettingGroupList.add(decodeGroup);
+
+        // 4. 超时换源
+        LiveSettingGroup timeoutGroup = new LiveSettingGroup();
+        timeoutGroup.setGroupIndex(3);
+        timeoutGroup.setGroupName("超时换源");
+        ArrayList<LiveSettingItem> timeoutItems = new ArrayList<>();
+        String[] timeouts = {"不换源", "5秒", "10秒", "15秒", "20秒", "30秒"};
+        int currentTimeout = Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 1);
+        for (int i = 0; i < timeouts.length; i++) {
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName(timeouts[i]);
+            item.setItemIndex(i);
+            if (i == currentTimeout) item.setItemSelected(true);
+            timeoutItems.add(item);
+        }
+        timeoutGroup.setLiveSettingItems(timeoutItems);
+        liveSettingGroupList.add(timeoutGroup);
+
+        // 5. 偏好设置
+        LiveSettingGroup prefGroup = new LiveSettingGroup();
+        prefGroup.setGroupIndex(4);
+        prefGroup.setGroupName("偏好设置");
+        ArrayList<LiveSettingItem> prefItems = new ArrayList<>();
+        String[] prefs = {"显示时间", "显示网速", "频道反序", "跨组选台"};
+        boolean[] prefValues = {
+            Hawk.get(HawkConfig.LIVE_SHOW_TIME, false),
+            Hawk.get(HawkConfig.LIVE_SHOW_NET_SPEED, false),
+            Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false),
+            Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false)
+        };
+        for (int i = 0; i < prefs.length; i++) {
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName(prefs[i]);
+            item.setItemIndex(i);
+            item.setItemSelected(prefValues[i]);
+            prefItems.add(item);
+        }
+        prefGroup.setLiveSettingItems(prefItems);
+        liveSettingGroupList.add(prefGroup);
+
+        // 6. 多源切换
+        LiveSettingGroup multiGroup = new LiveSettingGroup();
+        multiGroup.setGroupIndex(5);
+        multiGroup.setGroupName("多源切换");
+        ArrayList<LiveSettingItem> multiItems = new ArrayList<>();
+        JsonArray groups = Hawk.get(HawkConfig.LIVE_GROUP_LIST, new JsonArray());
+        int liveGroupIndex = ApiConfig.getLiveGroupIndex();
+        for (int i = 0; i < groups.size(); i++) {
+            JsonObject obj = groups.get(i).getAsJsonObject();
+            String name = obj.has("name") ? obj.get("name").getAsString() : "源" + (i+1);
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName(name);
+            item.setItemIndex(i);
+            if (i == liveGroupIndex) item.setItemSelected(true);
+            multiItems.add(item);
+        }
+        if (multiItems.isEmpty()) {
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName("默认");
+            item.setItemIndex(0);
+            multiItems.add(item);
+        }
+        multiGroup.setLiveSettingItems(multiItems);
+        liveSettingGroupList.add(multiGroup);
+
+        // 7. 配置切换（历史记录）
+        LiveSettingGroup historyGroup = new LiveSettingGroup();
+        historyGroup.setGroupIndex(6);
+        historyGroup.setGroupName("配置切换");
+        ArrayList<LiveSettingItem> historyItems = new ArrayList<>();
+        ArrayList<String> history = Hawk.get(HawkConfig.LIVE_API_HISTORY, new ArrayList<String>());
+        String currentApi = Hawk.get(HawkConfig.LIVE_API_URL, "");
+        for (int i = 0; i < history.size(); i++) {
+            LiveSettingItem item = new LiveSettingItem();
+            String url = history.get(i);
+            item.setItemName(url.length() > 30 ? url.substring(0, 30) + "..." : url);
+            item.setItemIndex(i);
+            if (url.equals(currentApi)) item.setItemSelected(true);
+            historyItems.add(item);
+        }
+        if (historyItems.isEmpty()) {
+            LiveSettingItem item = new LiveSettingItem();
+            item.setItemName("无历史配置");
+            item.setItemIndex(0);
+            historyItems.add(item);
+        }
+        historyGroup.setLiveSettingItems(historyItems);
+        liveSettingGroupList.add(historyGroup);
+    }
+
+    // ======================== 直播源加载 ========================
     private void initLiveChannelList() {
         if (ApiConfig.get().shouldReloadLiveConfig()) {
             loadLiveConfigOnEnter();
@@ -2863,7 +2999,6 @@ public class LivePlayActivity extends BaseActivity {
                         public String call() {
                             Spider sp = ApiConfig.get().getLiveCSP(finalUrl);
                             String json=sp.liveContent(finalUrl);
-//                            LOG.i("echo--loadProxyLives-json--"+json);
                             return json;
                         }
                     });
@@ -2877,7 +3012,6 @@ public class LivePlayActivity extends BaseActivity {
                         e.printStackTrace();
                     } finally {
                         if (sortJson==null || sortJson.isEmpty()) {
-                            // 频道列表为空时，使用默认播放列表
                             mHandler.post(new Runnable() {
                                 @Override
                                 public void run() {
@@ -3063,20 +3197,6 @@ public class LivePlayActivity extends BaseActivity {
         return visibleGroups;
     }
 
-    private void initLiveSettingGroupList() {
-        liveSettingGroupList=ApiConfig.get().getLiveSettingGroupList();
-        if (liveSettingGroupList.size() < 7) return;
-        liveSettingGroupList.get(3).getLiveSettingItems().get(Hawk.get(HawkConfig.LIVE_CONNECT_TIMEOUT, 1)).setItemSelected(true);
-        liveSettingGroupList.get(4).getLiveSettingItems().get(0).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_TIME, false));
-        liveSettingGroupList.get(4).getLiveSettingItems().get(1).setItemSelected(Hawk.get(HawkConfig.LIVE_SHOW_NET_SPEED, false));
-        liveSettingGroupList.get(4).getLiveSettingItems().get(2).setItemSelected(Hawk.get(HawkConfig.LIVE_CHANNEL_REVERSE, false));
-        liveSettingGroupList.get(4).getLiveSettingItems().get(3).setItemSelected(Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false));
-        int liveGroupIndex = ApiConfig.getLiveGroupIndex();
-        if (liveGroupIndex >= 0 && liveGroupIndex < liveSettingGroupList.get(5).getLiveSettingItems().size()) {
-            liveSettingGroupList.get(5).getLiveSettingItems().get(liveGroupIndex).setItemSelected(true);
-        }
-    }
-
     private void loadCurrentSourceList() {
         ArrayList<LiveSettingItem> liveSettingItemList = new ArrayList<>();
         if (currentLiveChannelItem != null && currentLiveChannelItem.getChannelSourceNames() != null) {
@@ -3088,7 +3208,9 @@ public class LivePlayActivity extends BaseActivity {
                 liveSettingItemList.add(liveSettingItem);
             }
         }
-        liveSettingGroupList.get(0).setLiveSettingItems(liveSettingItemList);
+        if (liveSettingGroupList.size() > 0) {
+            liveSettingGroupList.get(0).setLiveSettingItems(liveSettingItemList);
+        }
     }
 
     private void showResolutionAfterChannelSwitch() {
@@ -3101,21 +3223,6 @@ public class LivePlayActivity extends BaseActivity {
         mHandler.removeCallbacks(mHideResolutionInfoRun);
         mHandler.removeCallbacks(mUpdateResolutionInfoRun);
         mHandler.postDelayed(mUpdateResolutionInfoRun, RESOLUTION_INFO_RETRY_DELAY);
-    }
-
-    private void showResolutionSetting() {
-        mHandler.removeCallbacks(mHideResolutionInfoRun);
-        mHandler.removeCallbacks(mUpdateResolutionInfoRun);
-        if (Hawk.get(HawkConfig.LIVE_SHOW_RESOLUTION, false)) {
-            resolutionInfoPending = true;
-            resolutionInfoRetryCount = 0;
-            if (tvResolution != null) {
-                tvResolution.setVisibility(View.GONE);
-                mHandler.postDelayed(mUpdateResolutionInfoRun, RESOLUTION_INFO_RETRY_DELAY);
-            }
-        } else {
-            showResolutionAfterChannelSwitch();
-        }
     }
 
     private final Runnable mHideResolutionInfoRun = new Runnable() {
@@ -3184,7 +3291,6 @@ public class LivePlayActivity extends BaseActivity {
     };
 
     private void showNetSpeed() {
-//        tv_right_top_tipnetspeed.setVisibility(View.VISIBLE);
         mHandler.removeCallbacks(mUpdateNetSpeedRun);
         if (Hawk.get(HawkConfig.LIVE_SHOW_NET_SPEED, false)) {
             mHandler.post(mUpdateNetSpeedRun);
@@ -3200,7 +3306,6 @@ public class LivePlayActivity extends BaseActivity {
             if (mVideoView == null) return;
             String speed = PlayerHelper.getDisplaySpeedBps(mVideoView.getTcpSpeed(), true);
             tvNetSpeed.setText(speed);
-//            tv_right_top_tipnetspeed.setText(speed);
             mHandler.postDelayed(this, 1000);
         }
     };
@@ -3280,298 +3385,4 @@ public class LivePlayActivity extends BaseActivity {
         }
     }
 
-    private Integer[] getFirstChannelByName(String keyword) {
-        if (TextUtils.isEmpty(keyword)) return null;
-        String upperKeyword = keyword.toUpperCase(Locale.US);
-        for (LiveChannelGroup liveChannelGroup : liveChannelGroupList) {
-            if (liveChannelGroup == null || isNeedInputPassword(liveChannelGroup.getGroupIndex())) continue;
-            ArrayList<LiveChannelItem> groupChannels = liveChannelGroup.getLiveChannels();
-            if (groupChannels == null || groupChannels.isEmpty()) continue;
-            for (LiveChannelItem item : groupChannels) {
-                if (item == null || TextUtils.isEmpty(item.getChannelName())) continue;
-                if (item.getChannelName().toUpperCase(Locale.US).contains(upperKeyword)) {
-                    return new Integer[]{liveChannelGroup.getGroupIndex(), item.getChannelIndex()};
-                }
-            }
-        }
-        return null;
-    }
-
-    private Integer[] getNextChannel(int direction) {
-        int channelGroupIndex = currentChannelGroupIndex;
-        int liveChannelIndex = currentLiveChannelIndex;
-
-        //跨选分组模式下跳过加密频道分组（遥控器上下键换台/超时换源）
-        if (direction > 0) {
-            liveChannelIndex++;
-            if (liveChannelIndex >= getLiveChannels(channelGroupIndex).size()) {
-                liveChannelIndex = 0;
-                if (Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false)) {
-                    do {
-                        channelGroupIndex++;
-                        if (channelGroupIndex >= liveChannelGroupList.size())
-                            channelGroupIndex = 0;
-                    } while (!liveChannelGroupList.get(channelGroupIndex).getGroupPassword().isEmpty() || channelGroupIndex == currentChannelGroupIndex);
-                }
-            }
-        } else {
-            liveChannelIndex--;
-            if (liveChannelIndex < 0) {
-                if (Hawk.get(HawkConfig.LIVE_CROSS_GROUP, false)) {
-                    do {
-                        channelGroupIndex--;
-                        if (channelGroupIndex < 0)
-                            channelGroupIndex = liveChannelGroupList.size() - 1;
-                    } while (!liveChannelGroupList.get(channelGroupIndex).getGroupPassword().isEmpty() || channelGroupIndex == currentChannelGroupIndex);
-                }
-                liveChannelIndex = getLiveChannels(channelGroupIndex).size() - 1;
-            }
-        }
-
-        Integer[] groupChannelIndex = new Integer[2];
-        groupChannelIndex[0] = channelGroupIndex;
-        groupChannelIndex[1] = liveChannelIndex;
-
-        return groupChannelIndex;
-    }
-
-    private int getFirstNoPasswordChannelGroup() {
-        for (LiveChannelGroup liveChannelGroup : liveChannelGroupList) {
-            if (liveChannelGroup.getGroupPassword().isEmpty())
-                return liveChannelGroup.getGroupIndex();
-        }
-        return -1;
-    }
-
-    private boolean isCurrentLiveChannelValid() {
-        if (currentLiveChannelItem == null) {
-            Toast.makeText(App.getInstance(), "请先选择频道", Toast.LENGTH_SHORT).show();
-            return false;
-        }
-        return true;
-    }
-
-    //计算两个时间相差的秒数
-    public static long getTime(String startTime, String endTime)  {
-        SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        long eTime = 0;
-        try {
-            eTime = df.parse(endTime).getTime();
-        } catch (ParseException e) {
-            e.printStackTrace();
-        }
-        long sTime = 0;
-        try {
-            sTime = df.parse(startTime).getTime();
-        } catch (ParseException e) {
-            e.printStackTrace();
-        }
-        long diff = (eTime - sTime) / 1000;
-        return diff;
-    }
-    private  String durationToString(int duration) {
-        if (duration < 0) {
-            duration = 0;
-        }
-        String result = "";
-        int dur = duration / 1000;
-        int hour=dur/3600;
-        int min = (dur / 60) % 60;
-        int sec = dur % 60;
-        if(hour>0){
-            if (min > 9) {
-                if (sec > 9) {
-                    result =hour+":"+ min + ":" + sec;
-                } else {
-                    result =hour+":"+ min + ":0" + sec;
-                }
-            } else {
-                if (sec > 9) {
-                    result =hour+":"+ "0" + min + ":" + sec;
-                } else {
-                    result = hour+":"+"0" + min + ":0" + sec;
-                }
-            }
-        }else{
-            if (min > 9) {
-                if (sec > 9) {
-                    result = min + ":" + sec;
-                } else {
-                    result = min + ":0" + sec;
-                }
-            } else {
-                if (sec > 9) {
-                    result ="0" + min + ":" + sec;
-                } else {
-                    result = "0" + min + ":0" + sec;
-                }
-            }
-        }
-        return result;
-    }
-    public void showProgressBars( boolean show){
-
-        sBar.requestFocus();
-        if(show){
-            ll_right_top_huikan.setVisibility(View.VISIBLE);
-            backcontroller.setVisibility(View.VISIBLE);
-            ll_epg.setVisibility(View.GONE);
-        }else{
-            backcontroller.setVisibility(View.GONE);
-            ll_right_top_huikan.setVisibility(View.GONE);
-            if(!tip_epg1.getText().equals("暂无信息")){
-                ll_epg.setVisibility(View.VISIBLE);
-            }
-        }
-
-
-
-        iv_play.setOnClickListener(new View.OnClickListener() {
-
-            @Override
-            public void onClick(View arg0) {
-                mVideoView.start();
-                iv_play.setVisibility(View.INVISIBLE);
-                countDownTimer.start();
-                iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.vod_pause));
-            }
-        });
-
-        iv_playpause.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View arg0) {
-                if(mVideoView.isPlaying()){
-                    mVideoView.pause();
-                    countDownTimer.cancel();
-                    iv_play.setVisibility(View.VISIBLE);
-                    iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.icon_play));
-                }else{
-                    mVideoView.start();
-                    iv_play.setVisibility(View.INVISIBLE);
-                    countDownTimer.start();
-                    iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.vod_pause));
-                }
-            }
-        });
-        sBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-
-
-            @Override
-            public void onStopTrackingTouch(SeekBar arg0) {
-
-            }
-
-            @Override
-            public void onStartTrackingTouch(SeekBar arg0) {
-
-            }
-
-            @Override
-            public void onProgressChanged(SeekBar sb, int progress, boolean fromuser) {
-                if(fromuser){
-                    if(countDownTimer!=null){
-                        mVideoView.seekTo(progress);
-                        countDownTimer.cancel();
-                        countDownTimer.start();
-                    }
-                }
-            }
-        });
-        sBar.setOnKeyListener(new View.OnKeyListener() {
-            @Override
-            public boolean onKey(View arg0, int keycode, KeyEvent event) {
-                if(event.getAction()==KeyEvent.ACTION_DOWN){
-                    if(keycode==KeyEvent.KEYCODE_DPAD_CENTER||keycode==KeyEvent.KEYCODE_ENTER){
-                        if(mVideoView.isPlaying()){
-                            mVideoView.pause();
-                            countDownTimer.cancel();
-                            iv_play.setVisibility(View.VISIBLE);
-                            iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.icon_play));
-                        }else{
-                            mVideoView.start();
-                            iv_play.setVisibility(View.INVISIBLE);
-                            countDownTimer.start();
-                            iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.vod_pause));
-                        }
-                    }
-                }
-                return false;
-            }
-        });
-        if(mVideoView.isPlaying()){
-            iv_play.setVisibility(View.INVISIBLE);
-            iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.vod_pause));
-        }else{
-            iv_play.setVisibility(View.VISIBLE);
-            iv_playpause.setBackground(ContextCompat.getDrawable(LivePlayActivity.context, R.drawable.icon_play));
-        }
-        if(countDownTimer3==null){
-            countDownTimer3 = new CountDownTimer(postTimeout, 1000) {
-
-                @Override
-                public void onTick(long arg0) {
-
-                    if(mVideoView != null){
-                        sBar.setProgress(safeTimeMs(mVideoView.getCurrentPosition()));
-                        tv_currentpos.setText(durationToString(safeTimeMs(mVideoView.getCurrentPosition())));
-                    }
-
-                }
-
-                @Override
-                public void onFinish() {
-                    if(backcontroller.getVisibility() == View.VISIBLE){
-                        backcontroller.setVisibility(View.GONE);
-                    }
-                }
-            };
-        }else{
-            countDownTimer3.cancel();
-        }
-        countDownTimer3.start();
-    }
-
-    /**
-     * 当播放列表为空或加载失败时，设置一个默认的播放列表，保证播放界面不会崩溃
-     */
-    private void clearLiveChannelList() {
-        clearLiveChannelList(true);
-    }
-
-    private void clearLiveChannelList(boolean releasePlayer) {
-        refreshingLiveChannelList = false;
-        pendingLiveRefreshChannelName = null;
-        pendingLiveRefreshSourceIndex = -1;
-        currentLiveChannelItem = null;
-        currentLiveChannelIndex = -1;
-        currentLiveLookBackIndex = -1;
-        currentLiveChangeSourceTimes = 0;
-        liveChannelGroupList.clear();
-        ApiConfig.get().getChannelGroupList().clear();
-        mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
-        mHandler.removeCallbacks(mLoadEpgRun);
-        hideSwitchChannelSnapshot();
-        if (releasePlayer && mVideoView != null) mVideoView.release();
-        showSuccess();
-        if (liveChannelGroupAdapter != null) {
-            liveChannelGroupAdapter.clearGroupState();
-            liveChannelGroupAdapter.setNewData(new ArrayList<LiveChannelGroup>());
-        }
-        if (liveChannelItemAdapter != null) {
-            liveChannelItemAdapter.setFocusedChannelIndex(-1);
-            liveChannelItemAdapter.setSelectedChannelIndex(-1);
-            liveChannelItemAdapter.setNewData(new ArrayList<LiveChannelItem>());
-        }
-        if (tvLeftChannelListLayout != null) tvLeftChannelListLayout.setVisibility(View.INVISIBLE);
-        if (tvRightSettingLayout != null) tvRightSettingLayout.setVisibility(View.INVISIBLE);
-    }
-
-    private void setEmptyLiveChannelList() {
-        setEmptyLiveChannelList(true);
-    }
-
-    private void setEmptyLiveChannelList(boolean releasePlayer) {
-        clearLiveChannelList(releasePlayer);
-//        Toast.makeText(App.getInstance(), "源异常,请切换到其他源", Toast.LENGTH_SHORT).show();
-    }
-}
+    private Integer[] getFirstChannel
