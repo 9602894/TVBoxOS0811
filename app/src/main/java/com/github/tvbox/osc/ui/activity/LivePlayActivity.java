@@ -1167,13 +1167,16 @@ public class LivePlayActivity extends BaseActivity {
         } else if (tvRightSettingLayout.getVisibility() == View.VISIBLE) {
             mHandler.removeCallbacks(mHideSettingLayoutRun);
             mHandler.post(mHideSettingLayoutRun);
-        } else if (backcontroller.getVisibility() == View.VISIBLE) {
+        } else if( backcontroller.getVisibility() == View.VISIBLE){ //
             backcontroller.setVisibility(View.GONE);
-        } else if (isBack) {
-            isBack = false;
+        }else if(isBack){
+            isBack= false;
             playPreSource();
-        } else {
-            showSettingGroup();
+        }else {
+            mHandler.removeCallbacks(mConnectTimeoutChangeSourceRun);
+            mHandler.removeCallbacks(mUpdateNetSpeedRun);
+            exitingLivePlay = true;
+            super.onBackPressed();
         }
     }
 
@@ -1886,12 +1889,14 @@ public class LivePlayActivity extends BaseActivity {
         playChannel(currentChannelGroupIndex, currentLiveChannelIndex, true);
     }
 
-    //显示设置列表（酷9：去掉动画，直接显示）
+    //显示设置列表
     private void showSettingGroup() {
         if (tvLeftChannelListLayout.getVisibility() == View.VISIBLE) {
-            tvLeftChannelListLayout.setVisibility(View.INVISIBLE);
+            mHandler.removeCallbacks(mHideChannelListRun);
+            mHandler.post(mHideChannelListRun);
         }
-        if (tvRightSettingLayout.getVisibility() != View.VISIBLE) {
+        if (tvRightSettingLayout.getVisibility() == View.INVISIBLE) {
+            //重新载入默认状态
             ApiConfig.get().refreshLiveApiHistoryItems();
             loadCurrentSourceList();
             liveSettingGroupAdapter.setNewData(getVisibleLiveSettingGroupList());
@@ -1905,12 +1910,10 @@ public class LivePlayActivity extends BaseActivity {
                 settingItemIndex = 0;
             }
             mSettingItemView.scrollToPosition(settingItemIndex);
-            tvRightSettingLayout.setVisibility(View.VISIBLE);
-            mHandler.removeCallbacks(mHideSettingLayoutRun);
-            mHandler.postDelayed(mHideSettingLayoutRun, 30000);
+            mHandler.postDelayed(mFocusAndShowSettingGroup, 50);
         } else {
-            tvRightSettingLayout.setVisibility(View.INVISIBLE);
             mHandler.removeCallbacks(mHideSettingLayoutRun);
+            mHandler.post(mHideSettingLayoutRun);
         }
     }
 
@@ -1947,8 +1950,21 @@ public class LivePlayActivity extends BaseActivity {
     private Runnable mHideSettingLayoutRun = new Runnable() {
         @Override
         public void run() {
-            tvRightSettingLayout.setVisibility(View.INVISIBLE);
-            liveSettingGroupAdapter.setSelectedGroupIndex(-1);
+            ViewGroup.MarginLayoutParams params = (ViewGroup.MarginLayoutParams) tvRightSettingLayout.getLayoutParams();
+            if (tvRightSettingLayout.getVisibility() == View.VISIBLE) {
+                ViewObj viewObj = new ViewObj(tvRightSettingLayout, params);
+                ObjectAnimator animator = ObjectAnimator.ofObject(viewObj, "marginRight", new IntEvaluator(), params.rightMargin, -tvRightSettingLayout.getLayoutParams().width);
+                animator.setDuration(200);
+                animator.addListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        super.onAnimationEnd(animation);
+                        tvRightSettingLayout.setVisibility(View.INVISIBLE);
+                        liveSettingGroupAdapter.setSelectedGroupIndex(-1);
+                    }
+                });
+                animator.start();
+            }
         }
     };
 
@@ -2540,7 +2556,7 @@ public class LivePlayActivity extends BaseActivity {
                 liveSettingItemAdapter.selectItem(-1, false, false);
                 break;
             case 9:
-                liveSettingItemAdapter.selectItem(2, true, true); // 默认1.0x
+                liveSettingItemAdapter.selectItem(2, true, true);
                 break;
         }
         int scrollToPosition = liveSettingItemAdapter.getSelectedItemIndex();
@@ -2719,7 +2735,7 @@ public class LivePlayActivity extends BaseActivity {
                 });
                 break;
             }
-            case 7: // 酷9：直播订阅
+            case 7:
                 if (position == 0) {
                     showInputDialog("直播订阅地址", Hawk.get(HawkConfig.LIVE_API_URL, ""), val -> {
                         if (!val.isEmpty()) {
@@ -2733,7 +2749,7 @@ public class LivePlayActivity extends BaseActivity {
                     refreshLiveChannelListAndPlay("", -1);
                 }
                 break;
-            case 8: // 酷9：EPG订阅
+            case 8:
                 if (position == 0) {
                     showInputDialog("EPG地址", Hawk.get(HawkConfig.EPG_URL, ""), val -> {
                         Hawk.put(HawkConfig.EPG_URL, val);
@@ -2746,7 +2762,7 @@ public class LivePlayActivity extends BaseActivity {
                     Toast.makeText(this, "EPG已更新", Toast.LENGTH_SHORT).show();
                 }
                 break;
-            case 9: // 酷9：倍速
+            case 9:
                 float[] speedValues = {0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f};
                 if (position >= 0 && position < speedValues.length) {
                     liveSettingItemAdapter.selectItem(position, true, true);
@@ -3105,7 +3121,6 @@ public class LivePlayActivity extends BaseActivity {
             liveSettingGroupList.get(5).getLiveSettingItems().get(liveGroupIndex).setItemSelected(true);
         }
 
-        // 酷9：添加直播源订阅组（索引7）
         LiveSettingGroup sourceGroup = new LiveSettingGroup();
         sourceGroup.setGroupIndex(7);
         sourceGroup.setGroupName("直播订阅");
@@ -3115,7 +3130,6 @@ public class LivePlayActivity extends BaseActivity {
         sourceGroup.setLiveSettingItems(sourceItems);
         liveSettingGroupList.add(sourceGroup);
 
-        // 酷9：添加EPG订阅组（索引8）
         LiveSettingGroup epgGroup = new LiveSettingGroup();
         epgGroup.setGroupIndex(8);
         epgGroup.setGroupName("EPG订阅");
@@ -3125,7 +3139,6 @@ public class LivePlayActivity extends BaseActivity {
         epgGroup.setLiveSettingItems(epgItems);
         liveSettingGroupList.add(epgGroup);
 
-        // 酷9：添加倍速组（索引9）
         LiveSettingGroup speedGroup = new LiveSettingGroup();
         speedGroup.setGroupIndex(9);
         speedGroup.setGroupName("播放倍速");
@@ -3640,7 +3653,6 @@ public class LivePlayActivity extends BaseActivity {
 //        Toast.makeText(App.getInstance(), "源异常,请切换到其他源", Toast.LENGTH_SHORT).show();
     }
 
-    // ==================== 酷9：输入对话框 ====================
     private void showInputDialog(String title, String defaultValue, OnInputConfirmListener listener) {
         EditText editText = new EditText(this);
         editText.setText(defaultValue);
