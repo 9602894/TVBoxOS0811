@@ -2768,7 +2768,9 @@ public class LivePlayActivity extends BaseActivity {
         if (currentLiveChannelItem != null) {
             for (int i = 0; i < currentLiveChannelItem.getSourceNum(); i++) {
                 LiveSettingItem item = new LiveSettingItem();
-                item.setItemName(currentLiveChannelItem.getChannelSourceNames().get(i));
+                // 修复类型转换问题
+                Object nameObj = currentLiveChannelItem.getChannelSourceNames().get(i);
+                item.setItemName(nameObj == null ? "" : nameObj.toString());
                 item.setItemIndex(i);
                 if (i == currentLiveChannelItem.getSourceIndex()) {
                     item.setItemSelected(true);
@@ -2790,7 +2792,7 @@ public class LivePlayActivity extends BaseActivity {
         scaleGroup.setGroupName("画面比例");
         ArrayList<LiveSettingItem> scaleItems = new ArrayList<>();
         String[] scales = {"默认", "16:9", "4:3", "填充", "原始", "裁剪"};
-        int currentScale = Hawk.get(HawkConfig.LIVE_PLAYER_SCALE, 0);
+        int currentScale = Hawk.get("live_player_scale", 0); // 使用字符串键
         for (int i = 0; i < scales.length; i++) {
             LiveSettingItem item = new LiveSettingItem();
             item.setItemName(scales[i]);
@@ -2807,7 +2809,7 @@ public class LivePlayActivity extends BaseActivity {
         decodeGroup.setGroupName("解码方式");
         ArrayList<LiveSettingItem> decodeItems = new ArrayList<>();
         String[] decodes = {"系统", "ijk硬解", "ijk软解", "exo"};
-        int currentDecode = Hawk.get(HawkConfig.LIVE_PLAYER_TYPE, 0);
+        int currentDecode = Hawk.get("live_player_type", 0); // 使用字符串键
         for (int i = 0; i < decodes.length; i++) {
             LiveSettingItem item = new LiveSettingItem();
             item.setItemName(decodes[i]);
